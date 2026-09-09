@@ -1,0 +1,8 @@
+[project]
+name = "design-schedule"
+version = "0.4.2"
+requires-python = ">=3.11"
+dependencies = [
+    "pyinstaller>=6.21.0",
+    "pywebview>=6.2.1",
+]

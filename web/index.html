@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>工作日历</title>
+<script src="/assets/tailwind.min.js"></script>
+<script>tailwind.config = { darkMode: 'class' }</script>
+<script src="/assets/echarts.min.js"></script>
+<script src="/assets/qrcode.min.js"></script>
+<script src="/assets/xlsx.full.min.js"></script>
+<script src="/ai_files.js"></script>
+<style type="text/tailwindcss">
+  body { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif; }
+
+  /* ---------- 基础 ---------- */
+  .card { @apply bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-shadow duration-300; }
+  .card-hover { @apply hover:shadow-[0_8px_24px_rgba(99,102,241,0.10)] hover:-translate-y-0.5 transition-all duration-300; }
+  .nav-item { @apply relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm text-slate-600 dark:text-slate-300 cursor-pointer transition-all duration-200 select-none; }
+  .nav-item:hover { @apply bg-slate-100/80 dark:bg-slate-700/50 text-slate-900 dark:text-white; }
+  .nav-item.active { @apply bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-medium shadow-md shadow-indigo-500/25; }
+  .nav-item.active:hover { @apply text-white; }
+  .badge { @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap; }
+  .btn { @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition-all duration-200 select-none active:scale-[0.97]; }
+  .btn-primary { @apply bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/35 hover:brightness-110; }
+  .btn-ghost { @apply bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700/60 dark:text-slate-200 dark:hover:bg-slate-600/70; }
+  .btn-danger { @apply bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-900/25 dark:text-rose-300 dark:hover:bg-rose-900/40; }
+  .input { @apply w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/60 focus:border-indigo-400 transition-shadow; }
+  .label { @apply block text-xs text-slate-500 dark:text-slate-400 mb-1.5 font-medium; }
+  .muted { @apply text-slate-400 dark:text-slate-400 text-xs; }
+  th { @apply px-4 py-3 text-left text-xs text-slate-400 dark:text-slate-500 font-semibold tracking-wide whitespace-nowrap; font-variant-numeric: tabular-nums; }
+  td { @apply px-4 py-3 text-sm whitespace-nowrap; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300/80 dark:bg-slate-600/80 rounded-full hover:bg-slate-400; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ---------- 细节质感 ---------- */
+  /* 数字等宽：倒计时/日期/统计对齐不跳动 */
+  .tabular, .stat-num, .countdown { font-variant-numeric: tabular-nums; }
+  /* 文字选中：品牌色系 */
+  ::selection { background: rgba(99, 102, 241, 0.18); }
+  * { -webkit-tap-highlight-color: transparent; }
+  /* 标题防孤行 */
+  h1, h2, h3, h4 { text-wrap: balance; }
+  /* 键盘焦点可见（仅键盘） */
+  button:focus-visible, input:focus-visible, select:focus-visible, .nav-item:focus-visible { outline: 2px solid rgba(99, 102, 241, 0.55); outline-offset: 2px; }
+  /* 减少动效偏好：全部动画/过渡降级为瞬时 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+
+  /* 时间线图表区：手写双列网格（不依赖 Tailwind 运行时，修复宽屏单列堆叠/溢出） */
+  .tl-grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 1024px) { .tl-grid-2 { grid-template-columns: 1fr 1fr; } }
+
+  /* AI 助手页：高度锁定视口，输入框始终可见 */
+  #view-ai { height: calc(100dvh - 130px); display: flex; flex-direction: column; }
+  #view-ai.hidden { display: none; }
+
+  /* ---------- 动画 ---------- */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .anim-in { animation: fadeUp 0.35s ease both; }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .drawer-in { animation: slideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes toastIn { from { transform: translateY(12px) scale(0.96); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  .toast-in { animation: toastIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes modalPop { from { transform: translate(-50%, -50%) scale(0.94); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+  .modal-in { animation: modalPop 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes pulseSoft { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+  .pulse-soft { animation: pulseSoft 1.6s ease-in-out infinite; }
+
+  .tr-row { @apply transition-colors duration-150; }
+  .tr-row:hover { @apply bg-indigo-50/60 dark:bg-indigo-900/20; }
+  .bar-urgent { border-left: 4px solid #f43f5e; }
+  .bar-soon { border-left: 4px solid #f59e0b; }
+  .bar-calm { border-left: 4px solid #10b981; }
+  .bar-done { border-left: 4px solid #94a3b8; }
+
+  /* ---------- 移动端适配(≤768px,手机浏览器/安卓壳) ---------- */
+  @media (max-width: 768px) {
+    .mobile-hide { display: none !important; }
+    /* 视口高度用 dvh，键盘弹起/工具栏收放时不溢出 */
+    body { height: 100dvh !important; }
+    #searchBox { width: 104px !important; }
+    header { padding-left: 10px !important; padding-right: 10px !important; gap: 6px !important; }
+    #mainArea { padding: 10px 10px calc(74px + env(safe-area-inset-bottom, 0px)) !important; }
+    /* 侧栏 → 底部导航栏（含手势区安全距离） */
+    nav {
+      position: fixed; inset: auto 0 0 0; width: 100% !important; height: calc(60px + env(safe-area-inset-bottom, 0px));
+      flex-direction: row !important; align-items: stretch; padding: 5px 4px env(safe-area-inset-bottom, 0px);
+      border-right: 0 !important; border-top: 1px solid rgba(148,163,184,0.3);
+      background: rgba(255,255,255,0.96) !important; z-index: 40;
+    }
+    .dark nav { background: rgba(30,41,59,0.96) !important; }
+    nav > * { margin-top: 0 !important; }
+    nav .nav-label, nav .nav-spacer, #portInfo { display: none !important; }
+    nav .nav-item {
+      flex: 1; flex-direction: column; gap: 1px; padding: 3px 0;
+      font-size: 10px; border-radius: 10px; justify-content: center;
+    }
+    nav .nav-item svg { width: 20px; height: 20px; }
+    /* 表单/获奖弹窗 → 手机全屏页（去掉居中卡片与圆角） */
+    #formModal > div, #awardModal > div {
+      width: 100% !important; max-width: 100% !important;
+      height: 100% !important; max-height: 100% !important;
+      border-radius: 0 !important; padding: 16px !important;
+    }
+    #formModal .grid, #awardModal .grid { grid-template-columns: 1fr !important; }
+    #formModal .grid > .col-span-2, #awardModal .grid > .col-span-2 { grid-column: 1 / -1 !important; }
+    .view .card { border-radius: 16px; }
+    /* 列表页：手机只留 名称/临期线/倒计时 三列，表格宽度自适应，不再横向滚动 */
+    #view-list table, #view-awards table { min-width: 0 !important; width: 100% !important; }
+    #view-list td, #view-list th, #view-awards td, #view-awards th { white-space: normal; }
+    #view-list .badge, #view-awards .badge { white-space: nowrap; }
+    #view-list th:nth-child(2), #view-list td:nth-child(2),
+    #view-list th:nth-child(4), #view-list td:nth-child(4),
+    #view-list th:nth-child(6), #view-list td:nth-child(6),
+    #view-list th:last-child, #view-list td:last-child { display: none; }
+    #view-list td:first-child { max-width: none !important; }
+    /* 获奖页：手机隐藏 作者/凭证/操作 列（点行进详情即可） */
+    #view-awards th:nth-child(4), #view-awards td:nth-child(4),
+    #view-awards th:nth-child(6), #view-awards td:nth-child(6),
+    #view-awards th:last-child, #view-awards td:last-child { display: none; }
+    /* 手机横滚流畅：横向手势优先给表格容器，避免与页面竖向滚动抢手势 */
+    #view-list .card, #view-awards .card {
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    #view-list td { padding: 10px 8px; font-size: 13px; }
+    #view-list th { padding: 10px 8px; font-size: 11px; }
+    /* 详情抽屉：手机全屏 */
+    #drawerPanel { width: 100% !important; max-width: 100% !important; }
+    /* Toast 移到底部导航上方 */
+    #toast { bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important; left: 12px; right: 12px; }
+    /* 总览：统计卡与紧急区字距 */
+    #view-overview .card { padding: 14px !important; }
+    #view-overview .grid-cols-2 .card { padding: 12px !important; }
+    .view h3 { line-height: 1.4; }
+    .view table td { line-height: 1.5; }
+  }
+</style>
+</head>
+<body class="bg-[#f6f7fb] dark:bg-slate-900 text-slate-800 dark:text-slate-100 h-screen flex flex-col overflow-hidden">
+
+<!-- 顶栏 -->
+<header class="h-16 shrink-0 flex items-center gap-2 xl:gap-3 px-4 xl:px-5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg border-b border-slate-200/60 dark:border-slate-700/60 sticky top-0 z-30">
+  <div class="flex items-center gap-2.5 shrink-0">
+    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/30" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white">
+        <rect x="3" y="5" width="18" height="16" rx="3"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+        <line x1="8" y1="3" x2="8" y2="7"/>
+        <line x1="16" y1="3" x2="16" y2="7"/>
+        <path d="m9 14.5 2 2 4-4"/>
+      </svg>
+    </div>
+    <div>
+      <div class="text-[15px] font-bold leading-tight bg-gradient-to-r from-indigo-600 to-violet-600 dark:from-indigo-400 dark:to-violet-400 bg-clip-text text-transparent">工作日历</div>
+      <div class="text-[10px] muted hidden lg:block">WorkCalendar · 本地单机</div>
+    </div>
+  </div>
+  <div class="flex-1 min-w-2"></div>
+  <div class="relative shrink-0">
+    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" class="w-4 h-4"><circle cx="11" cy="11" r="6.5"/><line x1="16" y1="16" x2="21" y2="21"/></svg>
+    </span>
+    <input id="searchBox" class="input !w-36 xl:!w-52 !pl-9 !py-2 !rounded-full" placeholder="搜索…" autocomplete="off">
+  </div>
+  <select id="catFilter" class="input !w-24 xl:!w-28 !py-2 !rounded-full !text-xs shrink-0 mobile-hide"></select>
+  <select id="statusFilter" class="input !w-28 xl:!w-32 !py-2 !rounded-full !text-xs shrink-0 mobile-hide"></select>
+  <button class="btn btn-primary !py-2 shrink-0 whitespace-nowrap !px-3" onclick="openForm()"><span class="hidden sm:inline">＋ 添加比赛</span><span class="sm:hidden text-base leading-none">＋</span></button>
+  <button class="btn btn-ghost !py-2 shrink-0 whitespace-nowrap mobile-hide" onclick="go('import')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><line x1="4" y1="20" x2="20" y2="20"/></svg>
+    导入
+  </button>
+  <button id="themeBtn" class="btn btn-ghost !py-2 !px-3 shrink-0" onclick="toggleTheme()" title="深色/浅色" aria-label="切换深色/浅色模式">
+    <svg id="themeMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true"><path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5Z"/></svg>
+    <svg id="themeSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 hidden" aria-hidden="true"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="5.2" y1="5.2" x2="7" y2="7"/><line x1="17" y1="17" x2="18.8" y2="18.8"/><line x1="5.2" y1="18.8" x2="7" y2="17"/><line x1="17" y1="7" x2="18.8" y2="5.2"/></svg>
+  </button>
+</header>
+
+<div class="flex-1 flex overflow-hidden">
+  <!-- 侧栏 -->
+  <nav class="w-48 shrink-0 p-3 space-y-1 bg-white/70 dark:bg-slate-800/70 backdrop-blur-lg border-r border-slate-200/60 dark:border-slate-700/60 flex flex-col">
+    <div class="nav-label px-3.5 pt-2 pb-1.5 text-[10px] font-bold tracking-widest text-slate-300 dark:text-slate-500">浏览</div>
+    <div class="nav-item active" data-view="overview" onclick="go('overview')" role="button" tabindex="0" aria-label="总览">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      总览</div>
+    <div class="nav-item" data-view="list" onclick="go('list')" role="button" tabindex="0" aria-label="列表">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+      列表</div>
+    <div class="nav-item" data-view="timeline" onclick="go('timeline')" role="button" tabindex="0" aria-label="时间线">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+      时间线</div>
+    <div class="nav-item" data-view="ai" onclick="go('ai')" role="button" tabindex="0" aria-label="AI 助手">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="3"/><circle cx="9" cy="13.5" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="13.5" r="1" fill="currentColor" stroke="none"/><path d="M12 8V5"/><circle cx="12" cy="4" r="1" fill="currentColor" stroke="none"/></svg>
+      AI 助手</div>
+    <div class="nav-label px-3.5 pt-3 pb-1.5 text-[10px] font-bold tracking-widest text-slate-300 dark:text-slate-500">管理</div>
+    <div class="nav-item" data-view="awards" onclick="go('awards')" role="button" tabindex="0" aria-label="获奖">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 5.5H5a3 3 0 0 0 3 4"/><path d="M16 5.5h3a3 3 0 0 1-3 4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="7" y1="20" x2="17" y2="20"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+      获奖</div>
+    <div class="nav-item" data-view="settings" onclick="go('settings')" role="button" tabindex="0" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px] shrink-0" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="17" r="2.2"/></svg>
+      设置</div>
+    <div class="nav-spacer flex-1"></div>
+    <div id="portInfo" class="px-3.5 py-2 text-[10px] muted bg-slate-50 dark:bg-slate-700/40 rounded-xl leading-relaxed"></div>
+  </nav>
+
+  <!-- 主区 -->
+  <main class="flex-1 overflow-y-auto p-6" id="mainArea">
+    <div id="view-overview" class="view hidden"></div>
+    <div id="view-list" class="view hidden"></div>
+    <div id="view-timeline" class="view hidden"></div>
+    <div id="view-charts" class="view hidden"></div>
+    <div id="view-ai" class="view hidden"></div>
+    <div id="view-awards" class="view hidden"></div>
+    <div id="view-import" class="view hidden"></div>
+    <div id="view-settings" class="view hidden"></div>
+  </main>
+</div>
+
+<!-- 详情抽屉 -->
+<div id="drawer" class="fixed inset-0 z-40 hidden">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onclick="closeDrawer()"></div>
+  <div id="drawerPanel" class="absolute right-0 top-0 h-full w-[500px] max-w-[94vw] bg-slate-50 dark:bg-slate-800 shadow-2xl overflow-y-auto drawer-in"></div>
+</div>
+
+<!-- 添加/编辑模态框 -->
+<div id="formModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onclick="closeForm()"></div>
+  <div class="modal-in absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[660px] max-w-[94vw] max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-7 border border-slate-200/60 dark:border-slate-700">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="formTitle" class="text-lg font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">添加比赛</h3>
+      <button class="btn btn-ghost !px-2.5 !py-1.5 text-xs" onclick="closeForm()">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3.5">
+      <div class="col-span-2"><label class="label">比赛名称 *</label><input id="f_name" class="input" placeholder="如：2026 中国包装创意设计大赛"></div>
+      <div><label class="label">官方截止 *</label><input id="f_deadline" type="date" class="input"></div>
+      <div><label class="label">临期线（留空=自动缓冲）</label><input id="f_suggested" type="date" class="input"></div>
+      <div><label class="label">缓冲天数（默认 3）</label><input id="f_buffer" type="number" min="0" class="input"></div>
+      <div><label class="label">类别</label><input id="f_category" class="input" list="catList" placeholder="视觉传达 / 工业设计…"><datalist id="catList"></datalist></div>
+      <div class="col-span-2"><label class="label">主办方</label><input id="f_organizer" class="input"></div>
+      <div class="col-span-2"><label class="label">官网链接</label><input id="f_website" class="input" placeholder="https://…"></div>
+      <div><label class="label">报名开始</label><input id="f_signup_start" type="date" class="input"></div>
+      <div><label class="label">报名结束</label><input id="f_signup_end" type="date" class="input"></div>
+      <div class="col-span-2"><label class="label">作品要求</label><textarea id="f_requirements" rows="3" class="input"></textarea></div>
+      <div class="col-span-2"><label class="label">交付物（每行一个）</label><textarea id="f_deliverables" rows="2" class="input" placeholder="展板 JPG 1920×1080 ×1&#10;设计说明 PDF ×1"></textarea></div>
+      <div class="col-span-2"><label class="label">投稿方式</label><input id="f_sub_method" class="input" placeholder="在线提交 / 邮箱 / 邮寄"></div>
+      <div class="col-span-2"><label class="label">投稿入口 / 邮箱 / 邮寄地址（去哪交）</label><input id="f_sub_target" class="input"></div>
+      <div><label class="label">费用说明</label><input id="f_sub_fee" class="input" placeholder="50元/件 / 免费"></div>
+      <div><label class="label">联系方式</label><input id="f_sub_contact" class="input"></div>
+      <div class="col-span-2"><label class="label">文件类型（逗号分隔）</label><input id="f_fmt_types" class="input" placeholder=".jpg, .zip"></div>
+      <div><label class="label">大小上限 MB</label><input id="f_fmt_size" type="number" min="0" class="input"></div>
+      <div><label class="label">命名规则</label><input id="f_fmt_naming" class="input" placeholder="姓名_作品名_类别"></div>
+      <div class="col-span-2"><label class="label">里程碑（每行：名称:日期）</label><textarea id="f_milestones" rows="2" class="input" placeholder="校内初审:2026-09-10&#10;缴费截止:2026-09-05"></textarea></div>
+      <div class="col-span-2"><label class="label">备注</label><textarea id="f_notes" rows="2" class="input"></textarea></div>
+    </div>
+    <div class="flex justify-end gap-2.5 mt-6">
+      <button class="btn btn-ghost" onclick="closeForm()">取消</button>
+      <button class="btn btn-primary px-6" onclick="submitForm()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 获奖添加/编辑模态框 -->
+<div id="awardModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onclick="closeAwardForm()"></div>
+  <div class="modal-in absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] max-w-[94vw] max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-3xl shadow-2xl p-7 border border-slate-200/60 dark:border-slate-700">
+    <div class="flex items-center justify-between mb-5">
+      <h3 id="awardFormTitle" class="text-lg font-bold bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">＋ 添加获奖</h3>
+      <button class="btn btn-ghost !px-2.5 !py-1.5 text-xs" onclick="closeAwardForm()">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-3.5">
+      <div class="col-span-2"><label class="label">奖项名称 *</label><input id="a_name" class="input" placeholder="如：白金创意国际大学生平面设计大赛 铜奖"></div>
+      <div><label class="label">级别 *</label>
+        <select id="a_level" class="input">
+          <option value="校级">校级</option><option value="市级">市级</option>
+          <option value="省级">省级</option><option value="国家级">国家级</option>
+          <option value="国际级">国际级</option>
+        </select></div>
+      <div><label class="label">奖项等级</label><input id="a_rank" class="input" placeholder="一等奖 / 金奖 / 铜奖 / 优秀奖…" list="rankList"><datalist id="rankList">
+        <option value="一等奖"><option value="二等奖"><option value="三等奖"><option value="金奖"><option value="银奖"><option value="铜奖"><option value="优秀奖"><option value="入围奖"><option value="提名奖">
+      </datalist></div>
+      <div><label class="label">获奖日期</label><input id="a_date" type="date" class="input"></div>
+      <div><label class="label">关联比赛（可留空）</label><input id="a_competition" class="input" list="compList" placeholder="对应日历里的比赛"><datalist id="compList"></datalist></div>
+      <div><label class="label">作者角色</label><select id="a_role" class="input">
+        <option value="一作">一作（第一作者）</option><option value="二作">二作</option><option value="三作">三作</option>
+        <option value="独立完成">独立完成</option><option value="队长">队长</option><option value="参与">参与</option>
+      </select></div>
+      <div class="flex items-end pb-1"><label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input id="a_first" type="checkbox" class="w-4 h-4 accent-amber-500"> <span>✅ 是一作 / 独立完成</span></label></div>
+      <div class="col-span-2"><label class="label">📎 获奖凭证文件（证书图片/PDF，可多张）</label>
+        <div id="a_certs" class="flex flex-wrap gap-2 mb-2"></div>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="pickCert()">📂 选择文件…</button>
+          <input id="certFile" type="file" accept=".jpg,.jpeg,.png,.pdf,.webp" class="hidden" onchange="uploadCert(this)">
+          <span class="muted self-center">存到 data/certificates/ 文件夹，自动关联</span>
+        </div>
+      </div>
+      <div class="col-span-2"><label class="label">备注</label><textarea id="a_notes" rows="2" class="input" placeholder="评审单位 / 作品名 / 参赛人数…"></textarea></div>
+    </div>
+    <div class="flex justify-end gap-2.5 mt-6">
+      <button class="btn btn-ghost" onclick="closeAwardForm()">取消</button>
+      <button class="btn btn-primary px-6" onclick="submitAwardForm()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 z-[60] space-y-2.5"></div>
+
+<script src="./core.js"></script>
+<script>
+let refreshTimer = null;
+let _lastDataSnap = '';
+async function refresh() {
+  const q = new URLSearchParams();
+  if (S.filter.keyword) q.set('keyword', S.filter.keyword);
+  if (S.filter.cats.length) S.filter.cats.forEach(c => q.append('category', c));
+  if (S.filter.statuses.length) S.filter.statuses.forEach(s => q.append('status', s));
+  q.set('sort', S.sort.key); q.set('order', S.sort.order);
+  const [list, stats] = await Promise.all([api('/api/competitions?' + q), api('/api/stats')]);
+  S.comps = list.competitions; S.stats = stats;
+  /* 数据无变化时跳过重渲染：避免 60s 后台刷新打断用户（气泡/滚动/输入全保留） */
+  const snap = JSON.stringify([S.comps, S.stats, S.filter, S.sort]);
+  if (snap !== _lastDataSnap) { _lastDataSnap = snap; fillFilterOptions(); render(); }
+}
+function toast(msg, type = 'ok') {
+  const icons = { ok: '✅', warn: '⚠️', err: '❌' };
+  const colors = { ok: 'bg-slate-900/90 dark:bg-slate-700/90', warn: 'bg-amber-600/95', err: 'bg-rose-600/95' };
+  const el = document.createElement('div');
+  el.className = `${colors[type]} text-white text-sm px-4 py-3 rounded-2xl shadow-xl backdrop-blur toast-in flex items-center gap-2`;
+  el.innerHTML = `<span>${icons[type]}</span><span>${esc(msg)}</span>`;
+  $('toast').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 3800);
+}
+
+/* 启动/刷新时的临期横幅（M6：7 天内截止提示） */
+function showUrgentBanner() {
+  const old = $('urgentBanner');
+  if (old) old.remove();
+  const n = S.stats ? S.stats.due_in_7 : 0;
+  if (!n) return;
+  /* 用户关闭后当天不再弹；紧急数量变化（新比赛进入 7 天窗口）才重新提醒 */
+  try {
+    const off = JSON.parse(localStorage.getItem('wc_urgent_banner_off') || 'null');
+    if (off && off.date === new Date().toISOString().slice(0, 10) && off.count === n) return;
+  } catch (e) {}
+  const el = document.createElement('div');
+  el.id = 'urgentBanner';
+  el.className = 'mx-1 mb-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-rose-500 to-red-500 text-white text-sm shadow-lg shadow-rose-500/25 flex items-center gap-3 anim-in';
+  el.innerHTML = `<span class="text-lg">🚨</span><span class="flex-1"><b>${n}</b> 个比赛 7 天内截止（按临期线），抓紧安排！</span>
+    <button class="btn !bg-white/25 !py-1 !px-3 text-xs hover:!bg-white/40" onclick="go('list')">查看</button>
+    <button class="btn !bg-white/25 !py-1 !px-2 text-xs" title="关闭（今天不再提醒）" onclick="dismissUrgentBanner()">✕</button>`;
+  $('mainArea').prepend(el);
+}
+function dismissUrgentBanner() {
+  try { localStorage.setItem('wc_urgent_banner_off', JSON.stringify({
+    date: new Date().toISOString().slice(0, 10), count: S.stats ? S.stats.due_in_7 : 0 })); } catch (e) {}
+  const b = $('urgentBanner'); if (b) b.remove();
+}
+
+/* ================= 视图 ================= */
+function go(view) {
+  S.view = view;
+  try { if (location.hash !== '#' + view) location.hash = view; } catch (e) { /* 忽略 */ }
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+  const el = $('view-' + view);
+  el.classList.remove('hidden');
+  el.classList.remove('anim-in'); void el.offsetWidth; el.classList.add('anim-in');
+  render();
+}
+function render() {
+  if (!S.comps) return;
+  showUrgentBanner();
+  const v = S.view;
+  if (v === 'overview') renderOverview();
+  else if (v === 'list') renderList();
+  else if (v === 'timeline') renderTimeline();
+  else if (v === 'charts') renderCharts();
+  else if (v === 'ai') renderAi();
+  else if (v === 'awards') renderAwards();
+  else if (v === 'import') renderImport();
+  else if (v === 'settings') renderSettings();
+  $('portInfo').innerHTML = `📍 端口 ${S.port ?? '…'}<br>📦 ${S.stats ? S.stats.total + ' 个比赛' : ''}`;
+}
+
+/* ---------- 总览 ---------- */
+function renderOverview() {
+  const s = S.stats;
+  const urgent = S.stats.upcoming.filter(u => u.countdown <= 7 && !['submitted', 'done', 'abandoned'].includes(u.status));
+  const monthDue = s.months.find(m => m.month === s.today.slice(0, 7))?.count ?? 0;
+  const cards = [
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>', label: '进行中', val: (s.by_status.submitting || 0) + (s.by_status.open || 0) + (s.by_status.urgent || 0) + (s.by_status.not_started || 0), grad: 'from-indigo-500 to-violet-500', onClick: "setStatusFilter(['submitting','open','urgent','not_started'])" },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><path d="M12 4 2.5 19.5h19L12 4Z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none"/></svg>', label: '7 天内截止', val: s.due_in_7, grad: 'from-rose-500 to-red-500', onClick: "setStatusFilter(['urgent'])" },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>', label: '本月截止', val: monthDue, grad: 'from-amber-500 to-orange-500', onClick: "setStatusFilter(['urgent'])" },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><path d="M5 21V4"/><path d="M5 5h11l-2.5 4L16 13H5"/></svg>', label: '已提交 / 完成', val: s.completed, grad: 'from-emerald-500 to-teal-500', onClick: "setStatusFilter(['submitted','done'])" },
+  ];
+  let html = `<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">`;
+  for (const c of cards) html += `
+    <div class="card card-hover p-4 cursor-pointer flex items-center gap-3.5" onclick="${c.onClick}">
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br ${c.grad} flex items-center justify-center shadow-md shrink-0">${c.icon}</div>
+      <div><div class="text-2xl font-bold leading-tight stat-num">${c.val}</div><div class="muted mt-0.5">${c.label}</div></div>
+    </div>`;
+  html += `</div>`;
+  html += `<div class="card p-5 mb-5">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-rose-500 to-red-500 inline-block"></span>🚨 紧急区（7 天内截止）</h3>
+      ${urgent.length ? `<button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="go('list')">查看全部 →</button>` : ''}
+    </div>`;
+  if (!urgent.length) html += `<div class="text-center py-10"><div class="text-5xl mb-3">🎉</div><div class="text-slate-500 dark:text-slate-400 font-medium">7 天内没有要交的比赛，安心做作品吧</div><div class="muted mt-1">紧急的比赛会自动出现在这里</div></div>`;
+  else html += `<div class="space-y-2">` + urgent.slice(0, 8).map(c => {
+    const bar = c.countdown <= 3 ? 'bar-urgent' : 'bar-soon';
+    return `
+    <div class="flex items-center gap-3.5 p-3 rounded-xl bg-slate-50/80 dark:bg-slate-700/40 ${bar} cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" onclick="openDetail('${c.id}')">
+      <div class="flex-1 min-w-0"><div class="font-medium truncate">${esc(c.name)}</div>
+      <div class="muted mt-0.5"><span class="badge ${catColor(c.category)} !px-2 !py-0.5 !text-[10px] mr-1.5">${esc(c.category || '未分类')}</span>临期线 ${fmtDate(c.suggested_deadline)} · 官方 ${fmtDate(c.deadline)}</div></div>
+      ${countdownBadge(c)}</div>`; }).join('') + `</div>`;
+  html += `</div>`;
+  html += `<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="card p-5 col-span-2"><h3 class="font-bold mb-3 flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>未来 12 周到期分布（按临期线）</h3><div id="ovChart" style="height:230px"></div></div>
+    <div class="card p-5"><h3 class="font-bold mb-3 flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-amber-500 to-orange-500 inline-block"></span>最近导入</h3><div id="ovImport"></div></div>
+  </div>`;
+  $('view-overview').innerHTML = html;
+  renderOverviewChart();
+  renderImportHistory('ovImport');
+}
+function renderOverviewChart() {
+  const el = $('ovChart'); if (!el) return;
+  const chart = getChart('ovChart');
+  chart.setOption({
+    grid: { left: 38, right: 12, top: 15, bottom: 28 },
+    xAxis: { type: 'category', data: S.stats.weeks.map((_, i) => `${i * 7 + 1}-${Math.min((i + 1) * 7, 84)}天`), axisLabel: { fontSize: 10, color: '#94a3b8', interval: 1 }, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
+    series: [{ type: 'bar', data: S.stats.weeks, itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#8b5cf6' }, { offset: 1, color: '#6366f1' }] }, borderRadius: [6, 6, 0, 0] }, barWidth: '55%' }],
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.9)', textStyle: { color: '#fff', fontSize: 12 }, borderWidth: 0, formatter: p => `${p[0].name}<br><b>${p[0].value}</b> 个比赛到期` },
+  });
+}
+
+/* ---------- 列表 ---------- */
+function renderList() {
+  const show = S.comps;
+  const sortBtn = (key, label) => `<button class="btn btn-ghost !py-1.5 !px-3 text-xs ${S.sort.key === key ? '!bg-indigo-100 !text-indigo-700 dark:!bg-indigo-900/40 dark:!text-indigo-300' : ''}" onclick="setSort('${key}')">${label} ${S.sort.key === key ? (S.sort.order === 'asc' ? '↑' : '↓') : ''}</button>`;
+  const cur = [...S.filter.statuses];
+  const activeSet = (s) => cur.length && s.every(v => cur.includes(v)) && cur.every(v => s.includes(v));
+  const tabBtn = (label, statuses, emoji) => `<button class="btn !py-1.5 !px-3 text-xs ${activeSet(statuses) ? '!bg-gradient-to-r !from-indigo-500 !to-violet-500 !text-white shadow-md shadow-indigo-500/25' : 'btn-ghost'}" data-s='${JSON.stringify(statuses)}' onclick="setStatusFilter(JSON.parse(this.dataset.s))">${emoji} ${label}</button>`;
+  let html = `<div class="flex items-center gap-2 mb-4 anim-in flex-wrap">
+    <h3 class="font-bold text-lg flex items-center gap-2"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>全部比赛 <span class="muted font-normal">${show.length} 条</span></h3>
+    <div class="flex items-center gap-1.5 ml-1 flex-wrap">
+      ${tabBtn('全部', [], '🗂')}
+      ${tabBtn('进行中', ['submitting', 'open', 'urgent', 'not_started'], '🔥')}
+      ${tabBtn('已过期', ['past_suggested', 'overdue'], '⏰')}
+    </div>
+    <div class="flex-1"></div>
+    ${sortBtn('deadline', '截止')} ${sortBtn('name', '名称')} ${sortBtn('created', '添加')}
+  </div>`;
+  if (cur.length) {
+    html += `<div class="flex items-center gap-2 mb-3 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-700/40 text-sm">
+      <span>🔍 当前筛选：<b>${cur.map(s => statusBadge({ status: s })).join(' ')}</b>，共显示 ${show.length} 条（其他状态的比赛被隐藏）</span>
+      <button class="btn btn-ghost !py-1 !px-2.5 text-xs ml-auto" onclick="setStatusFilter([])">✕ 清除筛选，显示全部</button>
+    </div>`;
+  }
+  if (!show.length) {
+    html += `<div class="card p-12 text-center">
+      <div class="text-6xl mb-4">🗓️</div>
+      <div class="text-slate-500 dark:text-slate-300 font-medium text-lg mb-1">还没有比赛</div>
+      <div class="muted mb-6">点右上角「＋ 添加」，或让 Agent 把 JSON 丢进 data/import/，或到「导入」页粘贴</div>
+      <button class="btn btn-primary" onclick="openForm()">＋ 添加第一个比赛</button></div>`;
+    $('view-list').innerHTML = html; return;
+  }
+  html += `<div class="card overflow-x-auto"><table class="w-full min-w-[900px]"><thead class="bg-slate-50/80 dark:bg-slate-700/30"><tr>
+    <th>名称</th><th>类别</th><th>临期线</th><th>官方截止</th><th>倒计时</th><th>状态</th><th class="text-right">操作</th></tr></thead><tbody>`;
+  for (const c of show) {
+    const bar = c.status === 'submitted' || c.status === 'done' || c.status === 'abandoned' ? 'bar-done' : c.countdown <= 7 ? 'bar-urgent' : c.countdown <= 30 ? 'bar-soon' : 'bar-calm';
+    html += `<tr class="tr-row border-t border-slate-100/80 dark:border-slate-700/50 ${bar} cursor-pointer" onclick="openDetail('${c.id}')">
+      <td class="max-w-[300px]"><div class="font-medium truncate" title="${esc(c.name)}">${esc(c.name)}</div>
+        ${c.milestones?.length ? `<div class="muted truncate mt-0.5">⛳ ${esc(c.milestones.map(m => m.name).join('、'))}</div>` : ''}</td>
+      <td><span class="badge ${catColor(c.category)} !text-[11px]">${esc(c.category || '未分类')}</span></td>
+      <td><span class="font-semibold">${fmtDate(c.suggested_deadline)}</span>${c.suggested_deadline !== c.deadline ? `<div class="muted mt-0.5">官方 ${fmtDate(c.deadline)}</div>` : ''}</td>
+      <td class="muted">${fmtDate(c.deadline)}</td>
+      <td>${countdownBadge(c)}</td>
+      <td>${statusBadge(c)}</td>
+      <td class="text-right whitespace-nowrap">
+        <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="event.stopPropagation();openDetail('${c.id}')">详情</button>
+        <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="event.stopPropagation();openForm('${c.id}')">编辑</button>
+      </td></tr>`;
+  }
+  html += `</tbody></table></div>`;
+  $('view-list').innerHTML = html;
+}
+function setSort(key) {
+  if (S.sort.key === key) S.sort.order = S.sort.order === 'asc' ? 'desc' : 'asc';
+  else { S.sort.key = key; S.sort.order = 'asc'; }
+  refresh();
+}
+function setStatusFilter(s) {
+  S.filter.statuses = Array.isArray(s) ? s : [s];
+  go('list'); refresh();
+}
+
+/* ---------- 时间线（甘特） ---------- */
+function renderTimeline() {
+  const ENDED = ['overdue', 'submitted', 'done', 'abandoned'];
+  const ts = (s) => Date.parse(s);
+  const day = 864e5;
+  // 排序：进行中的在前（按临期线），已结束的排后面
+  const rows = S.comps.slice().sort((a, b) => {
+    const ae = ENDED.includes(a.status) ? 1 : 0, be = ENDED.includes(b.status) ? 1 : 0;
+    if (ae !== be) return ae - be;
+    return a.suggested_deadline < b.suggested_deadline ? -1 : 1;
+  });
+  const today = S.stats.today;
+  // 滑动窗口：始终显示 今天-3天 → 今天+1个月（自然月），时间推进窗口自动跟随
+  const minDate = ts(today) - 3 * day;
+  const wd = new Date(today);
+  const maxD = new Date(wd.getFullYear(), wd.getMonth() + 1, wd.getDate());
+  const maxDate = ts(`${maxD.getFullYear()}-${String(maxD.getMonth() + 1).padStart(2, '0')}-${String(maxD.getDate()).padStart(2, '0')}`);
+  // 只显示与窗口有交集的比赛（窗口外的自动隐藏，随日期滑动进出）
+  const visible = rows.filter(c => ts(c.deadline) >= minDate - day && ts(c.suggested_deadline) <= maxDate + day);
+  const laterCount = rows.length - visible.length;
+  const endedCount = visible.filter(c => ENDED.includes(c.status)).length;
+  const isMobile = window.innerWidth < 768;
+  const rowH = isMobile ? 30 : 34;
+  const height = Math.max(460, Math.max(visible.length, 1) * rowH + 100);
+  const fmt = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const fmtFull = (t) => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+  $('view-timeline').innerHTML = `
+    <div class="card p-5 anim-in">
+      <div class="flex items-center gap-2 mb-1">
+        <h3 class="font-bold flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>时间线（甘特图）</h3>
+        <div class="flex-1"></div>
+        <span class="muted text-xs">窗口内 ${visible.length} 个比赛${laterCount ? ` · ${laterCount} 个更晚（窗口外）` : ''}${endedCount ? ` · ${endedCount} 个已结束（灰色）` : ''}</span>
+      </div>
+      <div class="muted mb-2 text-xs">📅 滑动窗口：${fmt(minDate)} → ${fmt(maxDate)}（今天-3天 至 今天+1个月，随日期自动滑动）</div>
+      ${visible.length === 0 ? `<div class="mb-3 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 text-sm text-slate-500 dark:text-slate-300">窗口内暂无比赛。${laterCount ? `${laterCount} 个比赛在窗口之后，时间到了会自动出现。` : '可以到「列表」页查看全部比赛。'}</div>` : ''}
+      <div class="muted mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        <span><span class="inline-block w-3 h-2 rounded-sm bg-indigo-400/80 align-middle mr-1"></span>准备期</span>
+        <span><span class="inline-block w-3 h-2 rounded-sm bg-indigo-600/90 align-middle mr-1"></span>提交期</span>
+        <span class="text-rose-500 font-bold">▼</span>临期线 <span class="text-rose-500">(数字)</span>
+        <span class="font-bold text-slate-600 dark:text-slate-300">◆</span>官方截止 <span class="text-slate-400">(数字)</span>
+        <span class="text-amber-500">●</span>里程碑
+        <span class="text-rose-500">┆</span>今天
+        <span class="text-slate-400">▦灰</span>已截止/已结束
+        <span class="text-slate-400">${isMobile ? '👆 点击行看详情 · 下方滑条缩放/移动' : '💡 顶部 = 窗口日期尺 · 悬停看详情 · 滚轮上下翻页 · 下方滑条缩放 · 点击行打开详情'}</span>
+      </div>
+      <div id="ganttChart" style="height:${height}px"></div>
+    </div>
+    <div class="card p-5 anim-in mt-4">
+      <div class="flex items-center gap-3 mb-4">
+        <h3 class="font-bold flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>📊 图表分析</h3>
+        <div class="flex-1"></div>
+        <label class="muted">到期统计口径</label>
+        <select id="dueMode" class="input w-40 !py-2" onchange="renderDueChart()"><option value="suggested">临期线</option><option value="official">官方截止</option></select>
+      </div>
+      <div class="tl-grid-2">
+        <div class="bg-slate-50/60 dark:bg-slate-700/20 rounded-2xl p-4"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">⏳ 倒计时排行</h4><div id="cdChart" style="height:320px"></div></div>
+        <div class="bg-slate-50/60 dark:bg-slate-700/20 rounded-2xl p-4"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">📊 到期分布（按周）</h4><div id="dueChart" style="height:320px"></div></div>
+      </div>
+      <div class="tl-grid-2 mt-4">
+        <div class="bg-slate-50/60 dark:bg-slate-700/20 rounded-2xl p-4"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">🧩 类别占比</h4><div id="catChart" style="height:280px"></div></div>
+        <div class="bg-slate-50/60 dark:bg-slate-700/20 rounded-2xl p-4"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">📅 未来 5 周到期数（按临期线）</h4><div id="monChart" style="height:280px"></div></div>
+      </div>
+    </div>`;
+  const el = $('ganttChart'); if (!el) return;
+  const chart = getChart('ganttChart');
+  renderCountdownChart(); renderDueChart(); renderCategoryChart(); renderMonthChart();
+  chart.setOption({
+    grid: { left: isMobile ? 100 : (window.innerWidth < 1150 ? 150 : 235), right: isMobile ? 55 : 100, top: isMobile ? 24 : 44, bottom: isMobile ? 40 : 50 },
+    axisPointer: { link: [{ xAxisIndex: [0] }], label: { backgroundColor: '#6366f1' } },
+    tooltip: {
+      trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.92)', textStyle: { color: '#fff', fontSize: 12 },
+      borderWidth: 0, axisPointer: { type: 'cross', label: { backgroundColor: '#6366f1' } },
+      formatter: (ps) => {
+        for (const p of ps) {
+          if (p.seriesType !== 'custom') continue;
+          const c = visible[p.dataIndex];
+          const ms = (c.milestone_countdowns || []).map(m => `${m.name} ${fmtFull(ts(m.date))}`).join('<br>');
+          return `<b>${esc(c.name)}</b> <span style="color:#94a3b8">${c.status_label || ''}</span><br>
+            ─ ${fmtFull(ts(c.suggested_deadline))}（临期线）→ ${fmtFull(ts(c.deadline))}（官方截止）<br>
+            ${c.signup_start ? `报名：${fmtFull(ts(c.signup_start))} → ${fmtFull(ts(c.signup_end || c.signup_start))}<br>` : ''}
+            ${ms ? `⛳ ${ms}<br>` : ''}⏳ <b>${c.countdown < 0 ? '已过 ' + (-c.countdown) + ' 天' : '剩 ' + c.countdown + ' 天'}</b>`;
+        }
+        return '';
+      },
+    },
+    xAxis: [
+      {
+        // 主轴：刻度加密（每周），随滑条缩放
+        type: 'time', min: minDate, max: maxDate,
+        axisLabel: {
+          fontSize: isMobile ? 9 : 11, color: '#94a3b8', hideOverlap: false,
+          formatter: (v) => { const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()}`; },
+        },
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        splitLine: { show: true, lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+        minInterval: 7 * day,
+      },
+      {
+        // 顶部预览日期条：固定显示全范围月份刻度，不随缩放变化（手机屏窄，隐藏）
+        show: !isMobile,
+        type: 'time', position: 'top', min: minDate, max: maxDate,
+        axisLabel: {
+          fontSize: 10, color: '#94a3b8', hideOverlap: false,
+          formatter: (v) => { const d = new Date(v); return `${d.getMonth() + 1}月`; },
+        },
+        axisLine: { show: false }, axisTick: { show: false },
+        splitLine: { show: false }, axisPointer: { show: false },
+        minInterval: 14 * day,
+      },
+    ],
+    yAxis: {
+      type: 'category',
+      data: visible.map(c => c.name + (ENDED.includes(c.status) ? '（已截止）' : '')),
+      axisLabel: {
+        fontSize: isMobile ? 10 : 11, width: isMobile ? 92 : 210, overflow: 'truncate',
+        color: (v, i) => (visible[i] && ENDED.includes(visible[i].status)) ? '#94a3b8' : '#475569',
+      },
+    },
+    series: [{
+      type: 'custom', renderItem: (params, api) => {
+        const idx = api.value(0); const c = visible[idx];
+        const y = api.coord([0, idx])[1];
+        const barH = 15;
+        const ended = ENDED.includes(c.status);
+        const done = c.status === 'submitted' || c.status === 'done';
+        const parts = [];
+        const X = (t) => api.coord([t, 0])[0];
+        /* 绘图区左右边界：所有条形段钳制在此范围内，防止画出图表之外 */
+        const plotL = X(minDate), plotR = X(maxDate);
+        const rect = (x0, x1, fill, h = barH) => {
+          if (!isFinite(x0) || !isFinite(x1)) return;
+          x0 = Math.max(x0, plotL); x1 = Math.min(x1, plotR);
+          if (x1 - x0 < 0.5) return;  /* 完全在绘图区外（或宽度不足）不绘制 */
+          parts.push({ type: 'rect', shape: { x: x0, y: y - h / 2, width: x1 - x0, height: h }, style: { fill, opacity: 0.9 } });
+        };
+        const sd = ts(c.suggested_deadline), dl = ts(c.deadline);
+        const mainCol = done ? 'rgba(16,185,129,0.85)' : ended ? 'rgba(148,163,184,0.55)' : 'rgba(99,102,241,0.88)';
+        const prepCol = done ? 'rgba(16,185,129,0.35)' : ended ? 'rgba(148,163,184,0.3)' : 'rgba(129,140,248,0.4)';
+        // 准备段：有报名期用报名期，否则临期线前推 14 天（让条足够宽、可读）
+        const prepStart = (c.signup_start && c.signup_end) ? ts(c.signup_start) : sd - 14 * day;
+        rect(X(prepStart), X(sd), prepCol);
+        // 提交段：临期线 → 官方截止
+        rect(X(sd), X(dl), mainCol);
+        // 临期线红旗 + 日期小字
+        const sx = X(sd);
+        parts.push({ type: 'path', shape: { path: 'M0,-6 L6,0 L0,6 L-6,0 Z', x: sx - 6, y: y - 6 }, style: { fill: ended ? '#94a3b8' : '#f43f5e' } });
+        parts.push({ type: 'text', style: { text: fmt(sd), x: sx, y: y - barH / 2 - 5, fill: ended ? '#94a3b8' : '#f43f5e', fontSize: 9, align: 'center' } });
+        // 官方截止方块 + 日期小字
+        const dx = X(dl);
+        parts.push({ type: 'rect', shape: { x: dx - 4, y: y - 8, width: 8, height: 16 }, style: { fill: '#334155' } });
+        parts.push({ type: 'text', style: { text: fmt(dl), x: dx + 7, y: y - 5, fill: '#64748b', fontSize: 9, align: 'left' } });
+        // 里程碑圆点
+        for (const ms of c.milestone_countdowns || []) {
+          const mx = X(ts(ms.date));
+          parts.push({ type: 'circle', shape: { cx: mx, cy: y, r: 3.5 }, style: { fill: '#f59e0b', stroke: '#fff', lineWidth: 1 } });
+        }
+        return { type: 'group', children: parts };
+      },
+      encode: { x: [1, 2], y: 0 },
+      clip: true,
+      data: visible.map((c, i) => [i, ts(c.deadline), ts(c.suggested_deadline), c]),
+      // 今天线（必须放在 series 内部才生效）
+      markLine: {
+        silent: true, symbol: 'none',
+        lineStyle: { color: '#f43f5e', width: 1.5, type: 'dashed' },
+        label: { show: true, formatter: '今天', position: 'insideEndTop', fontSize: 10, color: '#f43f5e' },
+        data: [{ xAxis: ts(today) }],
+      },
+    }],
+    dataZoom: [
+      // 注意：不用 inside 滚轮缩放——滚轮固定用于页面上下翻页，缩放/平移全部由底部滑条完成
+      // filterMode: 'none' 关键！只缩放视图不过滤数据（custom 图表的数据由 renderItem 按当前轴范围计算位置）
+      { type: 'slider', xAxisIndex: [0], filterMode: 'none', height: isMobile ? 16 : 18, bottom: isMobile ? 6 : 8, start: 0, end: 100,
+        minSpan: 3 * day, showDetail: true,
+        borderColor: 'transparent', backgroundColor: 'rgba(148,163,184,0.15)',
+        fillerColor: 'rgba(99,102,241,0.15)', handleStyle: { color: '#818cf8' },
+        textStyle: { color: '#94a3b8', fontSize: isMobile ? 9 : 10 } },
+      // 手机端：图表区域直接手指左右拖动平移（触摸手势；鼠标滚轮/拖动全部禁用，不影响桌面翻页）
+      ...(isMobile ? [{ type: 'inside', xAxisIndex: [0], filterMode: 'none',
+        zoomOnMouseWheel: false, moveOnMouseWheel: false, moveOnMouseMove: false,
+        start: 0, end: 100, minSpan: 3 * day }] : []),
+    ],
+  });
+  chart.on('click', p => { if (p.dataIndex != null) openDetail(visible[p.dataIndex].id); });
+}
+
+/* ---------- 图表 ---------- */
+function renderCharts() {
+  $('view-charts').innerHTML = `
+    <div class="flex items-center gap-3 mb-4 anim-in"><h3 class="font-bold text-lg flex items-center gap-2"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>图表分析</h3><div class="flex-1"></div>
+      <label class="muted">到期统计口径</label>
+      <select id="dueMode" class="input w-40 !py-2" onchange="renderDueChart()"><option value="suggested">临期线</option><option value="official">官方截止</option></select>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+      <div class="card p-5"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">⏳ 倒计时排行</h4><div id="cdChart" style="height:380px"></div></div>
+      <div class="card p-5"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">📊 到期分布（按周）</h4><div id="dueChart" style="height:380px"></div></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="card p-5"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">🧩 类别占比</h4><div id="catChart" style="height:310px"></div></div>
+      <div class="card p-5"><h4 class="font-bold text-sm mb-3 flex items-center gap-2">📅 未来 5 周到期数（按临期线）</h4><div id="monChart" style="height:310px"></div></div>
+    </div>`;
+  renderCountdownChart(); renderDueChart(); renderCategoryChart(); renderMonthChart();
+}
+function renderCountdownChart() {
+  const active = S.comps.filter(c => !['submitted', 'done', 'abandoned', 'overdue'].includes(c.status));
+  const rows = active.slice().sort((a, b) => a.countdown - b.countdown).slice(0, 15);
+  const chart = getChart('cdChart');
+  chart.setOption({
+    grid: { left: 10, right: 64, top: 10, bottom: 10, containLabel: true },
+    xAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } }, axisLabel: { color: '#94a3b8', fontSize: 10 } },
+    yAxis: { type: 'category', data: rows.map(c => c.name), axisLabel: { fontSize: 11, width: 150, overflow: 'truncate', color: '#475569' } },
+    series: [{
+      type: 'bar', data: rows.map(c => ({
+        value: c.countdown,
+        itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: c.countdown <= 3 ? [{ offset: 0, color: '#e11d48' }, { offset: 1, color: '#f43f5e' }] : c.countdown <= 7 ? [{ offset: 0, color: '#f43f5e' }, { offset: 1, color: '#fb7185' }] : c.countdown <= 30 ? [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#fbbf24' }] : [{ offset: 0, color: '#10b981' }, { offset: 1, color: '#34d399' }] }, borderRadius: [0, 8, 8, 0] },
+      })), label: { show: true, position: 'right', formatter: p => `剩 ${p.value} 天`, fontSize: 11, color: '#64748b', fontWeight: 600 }, barWidth: 14,
+    }],
+    tooltip: { backgroundColor: 'rgba(15,23,42,0.9)', textStyle: { color: '#fff', fontSize: 12 }, borderWidth: 0, formatter: p => `${esc(rows[p.dataIndex].name)}<br>剩 <b>${p.value}</b> 天<br>临期线 ${rows[p.dataIndex].suggested_deadline}` },
+  });
+  chart.on('click', p => { if (p.dataIndex != null) openDetail(rows[p.dataIndex].id); });
+}
+function renderDueChart() {
+  const mode = $('dueMode')?.value || 'suggested';
+  const chart = getChart('dueChart');
+  const counts = {};
+  for (const c of S.comps) {
+    if (['submitted', 'done', 'abandoned'].includes(c.status)) continue;
+    const d = mode === 'suggested' ? c.suggested_deadline : c.deadline;
+    const days = Math.floor((Date.parse(d) - Date.parse(S.stats.today)) / 864e5);
+    if (days < 0) continue;
+    const wk = Math.floor(days / 7);
+    counts[wk] = (counts[wk] || 0) + 1;
+  }
+  const weeks = Array.from({ length: 12 }, (_, i) => counts[i] || 0);
+  chart.setOption({
+    grid: { left: 38, right: 12, top: 15, bottom: 28 },
+    xAxis: { type: 'category', data: weeks.map((_, i) => `${i * 7 + 1}-${Math.min((i + 1) * 7, 84)}天`), axisLabel: { fontSize: 10, color: '#94a3b8', interval: 1 }, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
+    series: [{ type: 'bar', data: weeks, itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#f59e0b' }, { offset: 1, color: '#fbbf24' }] }, borderRadius: [6, 6, 0, 0] }, barWidth: '55%' }],
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.9)', textStyle: { color: '#fff', fontSize: 12 }, borderWidth: 0, formatter: p => `${p[0].name}<br><b>${p[0].value}</b> 个比赛到期（${mode === 'suggested' ? '临期线' : '官方截止'}）` },
+  });
+}
+function renderCategoryChart() {
+  const chart = getChart('catChart');
+  const cats = Object.entries(S.stats.by_category).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  chart.setOption({
+    color: ['#8b5cf6', '#f43f5e', '#10b981', '#f59e0b', '#0ea5e9', '#a78bfa', '#94a3b8'],
+    series: [{ type: 'pie', radius: ['48%', '72%'], data: cats, label: { fontSize: 11, formatter: '{b}\n{c} 个', color: '#64748b' }, emphasis: { scaleSize: 6, itemStyle: { shadowBlur: 16, shadowColor: 'rgba(0,0,0,0.12)' } }, itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 } }],
+    tooltip: { trigger: 'item', backgroundColor: 'rgba(15,23,42,0.9)', textStyle: { color: '#fff', fontSize: 12 }, borderWidth: 0, formatter: p => `${esc(p.name)}：<b>${p.value}</b> 个（${p.percent}%）` },
+  });
+  chart.on('click', p => { S.filter.cats = [p.name]; S.filter.statuses = []; go('list'); refresh(); });
+}
+function renderMonthChart() {
+  // 未来 5 周到期数（按临期线，排除已结束）
+  const chart = getChart('monChart');
+  const today = S.stats.today;
+  const day = 864e5;
+  const ts = (s) => Date.parse(s);
+  const weeks = [];
+  for (let w = 0; w < 5; w++) {
+    const start = ts(today) + w * 7 * day;
+    const d = new Date(start);
+    weeks.push({ start, end: start + 7 * day, name: `${d.getMonth() + 1}/${d.getDate()}`, value: 0 });
+  }
+  const active = S.comps.filter(c => !['submitted', 'done', 'abandoned', 'overdue'].includes(c.status));
+  for (const c of active) {
+    const t = ts(c.suggested_deadline || c.deadline);
+    for (const wk of weeks) {
+      if (t >= wk.start && t < wk.end) { wk.value++; break; }
+    }
+  }
+  chart.setOption({
+    grid: { left: 38, right: 12, top: 18, bottom: 28 },
+    xAxis: { type: 'category', data: weeks.map(w => w.name), axisLabel: { color: '#94a3b8', fontSize: 10 }, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisTick: { show: false } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
+    series: [{ type: 'line', data: weeks.map(w => w.value), smooth: true, symbolSize: 9, lineStyle: { color: '#8b5cf6', width: 3 }, itemStyle: { color: '#8b5cf6', borderColor: '#fff', borderWidth: 2 }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(139,92,246,0.28)' }, { offset: 1, color: 'rgba(139,92,246,0.02)' }] } } }],
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(15,23,42,0.9)', textStyle: { color: '#fff', fontSize: 12 }, borderWidth: 0, formatter: (p) => {
+      const wk = weeks[p[0].dataIndex];
+      const d0 = new Date(wk.start), d1 = new Date(wk.end - day);
+      return `${d0.getMonth() + 1}/${d0.getDate()} - ${d1.getMonth() + 1}/${d1.getDate()}<br><b>${wk.value}</b> 个比赛到期`;
+    } },
+  });
+}
+
+/* ---------- 获奖管理 ---------- */
+const LEVEL_COLOR = {
+  '校级': 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  '市级': 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  '省级': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+  '国家级': 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  '国际级': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+};
+function levelBadge(lv) { return `<span class="badge ${LEVEL_COLOR[lv] || LEVEL_COLOR['校级']}">${esc(lv || '校级')}</span>`; }
+let S_AWARDS = { list: [], stats: null, filter: { keyword: '', level: '', first: false } };
+async function refreshAwards() {
+  const q = new URLSearchParams();
+  if (S_AWARDS.filter.keyword) q.set('keyword', S_AWARDS.filter.keyword);
+  if (S_AWARDS.filter.level) q.append('level', S_AWARDS.filter.level);
+  if (S_AWARDS.filter.first) q.set('first', 'true');
+  const [list, stats] = await Promise.all([api('/api/awards?' + q), api('/api/awards/stats')]);
+  S_AWARDS.list = list.awards || []; S_AWARDS.stats = stats;
+}
+function renderAwards() {
+  const st = S_AWARDS.stats || { total: 0, by_level: {}, first_author: 0 };
+  const lv = S_AWARDS.filter.level;
+  const cards = [
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 5.5H5a3 3 0 0 0 3 4"/><path d="M16 5.5h3a3 3 0 0 1-3 4"/><line x1="12" y1="13" x2="12" y2="17"/><line x1="7" y1="20" x2="17" y2="20"/><line x1="9" y1="17" x2="15" y2="17"/></svg>', label: '全部获奖', val: st.total, grad: 'from-amber-500 to-orange-500' },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/></svg>', label: '国家级', val: st.by_level['国家级'] || 0, grad: 'from-violet-500 to-purple-500', lv: '国家级' },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><circle cx="12" cy="14" r="5.5"/><path d="m9.2 9.8 1.3-5.3h3L15 9.8"/><path d="m10 20 2-3 2 3"/></svg>', label: '省级', val: st.by_level['省级'] || 0, grad: 'from-indigo-500 to-violet-500', lv: '省级' },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><path d="m12 3 2.6 5.4 6 .9-4.4 4.2 1.1 6L12 16.9 6.7 19.5l1.1-6L3.4 9.3l6-.9L12 3Z"/></svg>', label: '校级', val: st.by_level['校级'] || 0, grad: 'from-slate-500 to-slate-600', lv: '校级' },
+    { icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-white" aria-hidden="true"><path d="m4 20 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1Z"/><path d="m13.5 6.5 3 3"/></svg>', label: '一作/独立', val: st.first_author || 0, grad: 'from-rose-500 to-red-500' },
+  ];
+  let html = `<div class="flex items-center gap-2 mb-4 anim-in">
+    <h3 class="font-bold text-lg flex items-center gap-2"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-amber-500 to-orange-500 inline-block"></span>获奖管理 <span class="muted font-normal">${st.total} 条</span></h3>
+    <div class="flex-1"></div>
+    <button class="btn btn-primary !py-2" onclick="openAwardForm()">＋ 添加获奖</button>
+  </div>`;
+  html += `<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">`;
+  for (const c of cards) html += `
+    <div class="card card-hover p-4 cursor-pointer flex items-center gap-3.5" onclick="${c.lv ? `setAwardFilter('level','${c.lv}')` : c.label === '一作/独立' ? `setAwardFilter('first','1')` : `setAwardFilter('level','')`}">
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br ${c.grad} flex items-center justify-center shadow-md shrink-0">${c.icon}</div>
+      <div><div class="text-2xl font-bold leading-tight stat-num">${c.val}</div><div class="muted mt-0.5">${c.label}</div></div>
+    </div>`;
+  html += `</div>`;
+  html += `<div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
+    <div class="relative shrink-0"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+      <input id="awardSearch" class="input !w-56 !pl-9 !py-2 !rounded-full" placeholder="搜奖项/比赛/备注…" value="${esc(S_AWARDS.filter.keyword)}"></div>
+    <select id="awardLevelFilter" class="input !w-32 !py-2 !rounded-full !text-xs shrink-0">
+      <option value="">全部级别</option><option value="校级" ${lv === '校级' ? 'selected' : ''}>校级</option>
+      <option value="市级" ${lv === '市级' ? 'selected' : ''}>市级</option><option value="省级" ${lv === '省级' ? 'selected' : ''}>省级</option>
+      <option value="国家级" ${lv === '国家级' ? 'selected' : ''}>国家级</option><option value="国际级" ${lv === '国际级' ? 'selected' : ''}>国际级</option>
+    </select>
+    <label class="flex items-center gap-1.5 text-sm cursor-pointer select-none"><input id="awardFirstOnly" type="checkbox" class="w-4 h-4 accent-amber-500" ${S_AWARDS.filter.first ? 'checked' : ''}> 只看一作/独立</label>
+    <div class="flex-1"></div>
+    <span class="muted text-xs">💡 获奖记录可帮你判断该冲什么级别的比赛</span>
+  </div>`;
+  const show = S_AWARDS.list;
+  if (!show.length) {
+    html += `<div class="card p-12 text-center">
+      <div class="text-6xl mb-4">🏆</div>
+      <div class="text-slate-500 dark:text-slate-300 font-medium text-lg mb-1">还没有获奖记录</div>
+      <div class="muted mb-6">点右上角「＋ 添加获奖」，把证书拍下来/导出 PDF 上传存档<br>也可以让 Agent 用 ` + '`' + `WorkCalendar-cli.exe --import-awards x.json` + '`' + ` 批量导入</div>
+      <button class="btn btn-primary" onclick="openAwardForm()">＋ 添加第一条获奖</button></div>`;
+    $('view-awards').innerHTML = html; return;
+  }
+  // 按比赛分组：同系列比赛只显示一次组标题，避免重复（2026-08-11）
+  const groups = {};
+  for (const a of show) {
+    const key = a.competition || '其他';
+    (groups[key] = groups[key] || []).push(a);
+  }
+  const groupKeys = Object.keys(groups).sort((x, y) => groups[y].length - groups[x].length);
+  for (const key of groupKeys) {
+    const items = groups[key];
+    const firstCnt = items.filter(x => x.is_first_author).length;
+    html += `<div class="card overflow-x-auto mb-3">
+      <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-700/30 border-b border-slate-200/60 dark:border-slate-700/50 flex items-center gap-2 flex-wrap">
+        <span class="font-semibold text-sm truncate">🏁 ${esc(key)}</span>
+        <span class="badge bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">${items.length} 条</span>
+        ${firstCnt ? `<span class="badge bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">✍️ 一作 ${firstCnt}</span>` : ''}
+        <span class="muted text-xs ml-auto">${items[0].award_date ? fmtDate(items[0].award_date) : ''}</span>
+      </div>
+      <table class="w-full min-w-[860px]"><thead class="bg-slate-50/80 dark:bg-slate-700/30"><tr>
+        <th>奖项</th><th>级别</th><th>奖项等级</th><th>作者</th><th>获奖日期</th><th>凭证</th><th class="text-right">操作</th></tr></thead><tbody>`;
+    for (const a of items) {
+      const firstBadge = a.is_first_author ? `<span class="badge bg-amber-50 text-amber-600 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700">✍️ 一作</span>` : `<span class="badge bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">${esc(a.role || '参与')}</span>`;
+      const certs = (a.certificate_files || []).length;
+      html += `<tr class="tr-row border-t border-slate-100/80 dark:border-slate-700/50 cursor-pointer" onclick="viewAwardDetail('${a.id}')">
+        <td class="max-w-[300px]"><div class="font-medium truncate" title="${esc(a.name)}">${esc(a.name)}</div>
+          ${a.notes ? `<div class="muted truncate mt-0.5" title="${esc(a.notes)}">${esc(a.notes.slice(0, 28))}${a.notes.length > 28 ? '…' : ''}</div>` : ''}</td>
+        <td>${levelBadge(a.level)}</td>
+        <td>${esc(a.award_rank) || '<span class="muted">—</span>'}</td>
+        <td>${firstBadge}</td>
+        <td class="muted">${a.award_date ? fmtDate(a.award_date) : '—'}</td>
+        <td>${certs ? `<span class="badge bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">📎 ${certs} 个</span>` : '<span class="muted">无</span>'}</td>
+        <td class="text-right whitespace-nowrap">
+          <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="event.stopPropagation();viewAwardDetail('${a.id}')">详情</button>
+          <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="event.stopPropagation();openAwardForm('${a.id}')">编辑</button>
+        </td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+  $('view-awards').innerHTML = html;
+  const sb = $('awardSearch'); if (sb) {
+    sb.oninput = debounce(() => { S_AWARDS.filter.keyword = sb.value; refreshAwards().then(renderAwards); }, 300);
+  }
+  const lf = $('awardLevelFilter'); if (lf) lf.onchange = () => { setAwardFilter('level', lf.value); };
+  const fo = $('awardFirstOnly'); if (fo) fo.onchange = () => { setAwardFilter('first', fo.checked ? '1' : ''); };
+}
+function debounce(fn, ms) { let t = null; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+function setAwardFilter(kind, val) {
+  if (kind === 'level') S_AWARDS.filter.level = val;
+  else if (kind === 'first') S_AWARDS.filter.first = !!val;
+  else if (kind === 'keyword') S_AWARDS.filter.keyword = val;
+  refreshAwards().then(renderAwards);
+}
+let AWARD_CERTS = [];
+function openAwardForm(id) {
+  S.editingAwardId = id || null;
+  $('awardFormTitle').textContent = id ? '✏️ 编辑获奖' : '＋ 添加获奖';
+  AWARD_CERTS = [];
+  const f = {};
+  if (id) { const a = S_AWARDS.list.find(x => x.id === id) || {}; Object.assign(f, a); }
+  $('a_name').value = f.name || '';
+  $('a_level').value = f.level || '校级';
+  $('a_rank').value = f.award_rank || '';
+  $('a_date').value = f.award_date || '';
+  $('a_competition').value = f.competition || '';
+  $('a_role').value = f.role || (f.is_first_author ? '一作' : '');
+  $('a_first').checked = !!f.is_first_author;
+  $('a_notes').value = f.notes || '';
+  AWARD_CERTS = [...(f.certificate_files || [])];
+  renderCertList();
+  // 关联比赛下拉
+  const dl = $('compList'); if (dl) dl.innerHTML = S.comps.map(c => `<option value="${esc(c.name)}">`).join('');
+  $('awardModal').classList.remove('hidden');
+}
+function closeAwardForm() { $('awardModal').classList.add('hidden'); S.editingAwardId = null; AWARD_CERTS = []; }
+function renderCertList() {
+  const el = $('a_certs'); if (!el) return;
+  if (!AWARD_CERTS.length) { el.innerHTML = '<span class="muted text-xs">未上传凭证</span>'; return; }
+  el.innerHTML = AWARD_CERTS.map((f, i) => `
+    <span class="badge bg-emerald-50 text-emerald-600 border border-emerald-200/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700 !py-1.5 gap-1">
+      <a href="${IS_LOCAL ? 'javascript:void(0)' : '/certificates/' + encodeURIComponent(f)}" target="_blank" rel="noopener" class="underline">📎 ${esc(f)}</a>
+      <button class="hover:text-rose-500" onclick="removeCert(${i})" title="移除">✕</button>
+    </span>`).join('');
+}
+async function renderCertsInto(el, certs) {
+  if (!el) return;
+  certs = certs || [];
+  if (!certs.length) { el.innerHTML = '<span class="muted">未上传凭证</span>'; return; }
+  if (!IS_LOCAL) {
+    el.innerHTML = certs.map(f => /\.(jpe?g|png|webp|gif)$/i.test(f)
+      ? `<div class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600"><img src="/certificates/${encodeURIComponent(f)}" class="w-full h-auto cursor-pointer" onclick="window.open('/certificates/${encodeURIComponent(f)}','_blank')" title="点击放大"></div>`
+      : `<a class="btn btn-ghost !py-1.5 !px-3 text-xs" href="/certificates/${encodeURIComponent(f)}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`).join('');
+    return;
+  }
+  el.innerHTML = '<span class="muted text-xs">加载凭证…</span>';
+  const parts = [];
+  for (const f of certs) {
+    const url = await certUrl(f);
+    if (!url) { parts.push(`<div class="muted text-xs">📄 ${esc(f)}（凭证在电脑上，同步后可见）</div>`); continue; }
+    if (/\.(jpe?g|png|webp|gif)$/i.test(f)) parts.push(`<img src="${url}" class="w-full h-auto rounded-xl border border-slate-200 dark:border-slate-600">`);
+    else parts.push(`<a class="btn btn-ghost !py-1.5 !px-3 text-xs" href="${url}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`);
+  }
+  el.innerHTML = parts.join('');
+}
+function pickCert() { $('certFile').click(); }
+async function uploadCert(input) {
+  const f = input.files[0]; if (!f) return;
+  if (f.size > 50 * 1024 * 1024) { toast('文件过大（上限 50MB）', 'err'); input.value = ''; return; }
+  const buf = await f.arrayBuffer();
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  try {
+    const r = await api('/api/certificates', { method: 'POST', body: { name: f.name, data: b64 } });
+    AWARD_CERTS.push(r.filename);
+    renderCertList();
+    toast('凭证已上传：' + r.filename);
+  } catch (e) { toast('上传失败：' + e.message, 'err'); }
+  input.value = '';
+}
+function removeCert(i) { AWARD_CERTS.splice(i, 1); renderCertList(); }
+async function submitAwardForm() {
+  const name = $('a_name').value.trim();
+  if (!name) return toast('奖项名称是必填项', 'warn');
+  const body = {
+    name, level: $('a_level').value, award_rank: $('a_rank').value.trim(),
+    award_date: $('a_date').value || null, competition: $('a_competition').value.trim(),
+    role: $('a_role').value, is_first_author: $('a_first').checked,
+    certificate_files: AWARD_CERTS, notes: $('a_notes').value,
+  };
+  try {
+    if (S.editingAwardId) await api('/api/awards/' + S.editingAwardId, { method: 'PUT', body });
+    else await api('/api/awards', { method: 'POST', body });
+    toast(S.editingAwardId ? '已保存 🏆' : '已添加获奖 🎉');
+    closeAwardForm(); refreshAwards().then(renderAwards);
+  } catch (e) { toast('保存失败：' + e.message, 'err'); }
+}
+async function viewAwardDetail(id) {
+  let a = S_AWARDS.list.find(x => x.id === id);
+  if (!a) a = (await api('/api/awards/' + id)).award;
+  $('drawerPanel').innerHTML = `
+    <div class="h-24 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 relative px-6 pt-5 pb-4">
+      <div class="absolute right-4 top-4"><button class="w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 backdrop-blur flex items-center justify-center text-sm transition-colors" onclick="closeDrawer()">✕</button></div>
+      <div class="text-white/70 text-xs mb-1">${levelBadge(a.level)} ${a.award_rank ? '· ' + esc(a.award_rank) : ''} ${a.is_first_author ? '· ✍️ 一作' : a.role ? '· ' + esc(a.role) : ''}</div>
+      <h2 class="text-xl font-bold text-white leading-snug pr-8">${esc(a.name)}</h2>
+    </div>
+    <div class="p-6">
+      <div class="grid grid-cols-2 gap-3 mt-2">
+        <div class="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 p-4">
+          <div class="muted mb-1">🏆 级别</div><div class="text-lg font-bold">${esc(a.level)}</div></div>
+        <div class="rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-600 p-4">
+          <div class="muted mb-1">📅 获奖日期</div><div class="text-lg font-bold">${a.award_date || '—'}</div></div>
+      </div>
+      ${a.competition ? `<div class="mt-4 text-sm"><span class="muted">关联比赛：</span><b>${esc(a.competition)}</b></div>` : ''}
+      <div class="mt-4"><h4 class="font-bold text-sm mb-2 flex items-center gap-2"><span class="w-1 h-3.5 rounded-full bg-amber-400 inline-block"></span>📎 获奖凭证（${(a.certificate_files || []).length} 个）</h4>
+        <div id="awardCertsBox" class="space-y-2"></div></div>
+      ${a.notes ? `<div class="mt-4 text-sm"><span class="muted">备注：</span>${esc(a.notes)}</div>` : ''}
+      ${a.source_url ? `<div class="muted mt-2 text-xs">来源：<a class="underline" href="${esc(safeUrl(a.source_url))}" target="_blank" rel="noopener">${esc(a.source_url)}</a></div>` : ''}
+      <div class="flex gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+        <button class="btn btn-ghost" onclick="openAwardForm('${a.id}')">✏️ 编辑</button>
+        <button class="btn btn-danger" onclick="delAward('${a.id}')">🗑 删除</button>
+      </div>
+    </div>`;
+  $('drawer').classList.remove('hidden');
+  renderCertsInto($('awardCertsBox'), a.certificate_files);
+}
+async function delAward(id) {
+  if (!confirm('确定删除这条获奖记录？删除前会自动备份。')) return;
+  await api('/api/awards/' + id, { method: 'DELETE' });
+  toast('已删除'); closeDrawer(); refreshAwards().then(renderAwards);
+}
+
+/* ---------- 导入 ---------- */
+function renderImport() {
+  $('view-import').innerHTML = `
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="card p-6">
+        <h3 class="font-bold mb-1 flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>📥 粘贴导入</h3>
+        <div class="muted mb-3">Agent 整理好的 JSON 或 Markdown 表格直接粘贴；必填：名称 + 截止日期</div>
+        <textarea id="impText" class="input font-mono text-xs h-56" placeholder='{"competitions": [{"name": "2026 XX大赛", "deadline": "2026-09-15", "category": "视觉传达"}]}'></textarea>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-primary" onclick="doImportText()">🚀 导入</button>
+          <button class="btn btn-ghost" onclick="pickFile()">📂 选择文件</button>
+          <input id="impFile" type="file" accept=".json,.md,.txt" class="hidden" onchange="doImportFile(this)">
+        </div>
+      </div>
+      <div class="card p-6">
+        <h3 class="font-bold mb-3 flex items-center gap-2"><span class="w-1.5 h-4 rounded-full bg-gradient-to-b from-violet-500 to-purple-500 inline-block"></span>🤖 Agent 通道</h3>
+        <ol class="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+          <li class="flex gap-2.5"><span class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0">1</span><span>把 JSON 丢进 <code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">data/import/</code>，2 秒自动导入</span></li>
+          <li class="flex gap-2.5"><span class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0">2</span><span>命令行：<code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">WorkCalendar-cli.exe --import x.json</code></span></li>
+          <li class="flex gap-2.5"><span class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center text-xs font-bold shrink-0">3</span><span>HTTP：<code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">curl -X POST http://127.0.0.1:${S.port}/api/import -d @x.json</code></span></li>
+        </ol>
+        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700"><h4 class="font-bold text-sm mb-2">🕘 导入历史</h4><div id="impHistory"></div></div>
+      </div>
+    </div>`;
+  renderImportHistory('impHistory');
+}
+async function doImportText() {
+  const text = $('impText').value.trim();
+  if (!text) return toast('请先粘贴内容', 'warn');
+  try {
+    const r = await api('/api/import', { method: 'POST', body: { text } });
+    showImportReport(r.report); pushImportHistory(r.report);
+    $('impText').value = ''; refresh();
+  } catch (e) { toast('导入失败：' + e.message, 'err'); }
+}
+async function doImportFile(input) {
+  const f = input.files[0]; if (!f) return;
+  const text = await f.text();
+  try {
+    const r = await api('/api/import', { method: 'POST', body: { text } });
+    showImportReport(r.report); pushImportHistory(r.report);
+    refresh();
+  } catch (e) { toast('导入失败：' + e.message, 'err'); }
+  input.value = '';
+}
+function pushImportHistory(report) {
+  S.importHistory.unshift({ time: new Date().toLocaleString(), report });
+  S.importHistory = S.importHistory.slice(0, 20);
+  try { localStorage.setItem('wc_import_history', JSON.stringify(S.importHistory)); } catch (e) { /* 忽略 */ }
+}
+function pickFile() { $('impFile').click(); }
+function showImportReport(r) {
+  const parts = [];
+  if (r.added) parts.push(`新增 ${r.added} 条`);
+  if (r.updated) parts.push(`更新 ${r.updated} 条`);
+  if (r.skipped) parts.push(`跳过重复 ${r.skipped} 条`);
+  if (r.errors?.length) parts.push(`失败 ${r.errors.length} 条`);
+  toast(parts.join('、') || '无变化', r.errors?.length ? 'warn' : 'ok');
+  if (r.errors?.length) console.warn('导入错误明细', r.errors);
+}
+function renderImportHistory(targetId) {
+  const el = $(targetId); if (!el) return;
+  if (!S.importHistory.length) { el.innerHTML = '<div class="muted py-3 text-center">暂无导入记录</div>'; return; }
+  el.innerHTML = S.importHistory.slice(0, 8).map(h => `
+    <div class="text-xs py-2 border-b border-slate-100 dark:border-slate-700 last:border-0 flex justify-between gap-2">
+      <span class="muted">${h.time}</span>
+      <span class="text-slate-500 dark:text-slate-300">+${h.report.added} · ~${h.report.updated} · 重${h.report.skipped}${h.report.errors?.length ? ` · <span class="text-rose-500">败${h.report.errors.length}</span>` : ''}</span>
+    </div>`).join('');
+}
+
+/* ---------- 设置 ---------- */
+function renderSettings() {
+  $('view-settings').innerHTML = `
+    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 anim-in"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>设置</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="card p-6 space-y-4">
+        <h4 class="font-bold text-sm flex items-center gap-2">💾 数据管理</h4>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-primary" onclick="doBackup()">立即备份</button>
+          <button class="btn btn-primary" onclick="exportAllData()">📦 一键导出全部数据（比赛+获奖+证书）</button>
+          <button class="btn btn-ghost" onclick="openExportFolder()">📂 打开导出文件夹</button>
+          <button class="btn btn-ghost" onclick="openLogsFolder()">🧾 打开日志文件夹</button>
+          <button class="btn btn-ghost" onclick="exportLogsZip()">🧾 导出日志文件（反馈问题用）</button>
+        </div>
+        <div class="muted">导出为 zip 备份包，保存在程序目录 data\exports\ 下</div>
+        <div class="muted" id="backupInfo"></div>
+        <div class="pt-3 border-t border-slate-100 dark:border-slate-700/60">
+          <h4 class="font-bold text-sm mb-2 flex items-center gap-2">📥 导入比赛（JSON / Markdown）</h4>
+          <textarea id="impText" class="input font-mono text-xs h-24" placeholder='{"competitions": [{"name": "2026 XX大赛", "deadline": "2026-09-15", "category": "视觉传达"}]}'></textarea>
+          <div class="flex gap-2 mt-2">
+            <button class="btn btn-primary !py-1.5 !px-3 text-xs" onclick="doImportText()">📥 导入</button>
+            <button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="pickFile()">📂 选择文件</button>
+            <input id="impFile" type="file" accept=".json,.md,.txt" class="hidden" onchange="doImportFile(this)">
+          </div>
+          <div class="muted mt-2">Agent 或自己粘贴比赛清单，点「导入」自动去重</div>
+          <div id="impHistory" class="mt-1"></div>
+        </div>
+      </div>
+      <div class="card p-6 space-y-3">
+        <h4 class="font-bold text-sm flex items-center gap-2">🔄 数据同步（手机 ↔ 电脑）</h4>
+        <div class="muted leading-relaxed">${IS_LOCAL ? '手机和电脑连同一个 WiFi，电脑上打开工作日历。点「扫一扫」扫电脑设置页的二维码即完成配对，以后直接同步。' : '桌面版数据就在本机。手机 apk 装好后，到手机设置页扫这个码配对：'}<br>⚠️ 连不上时依次排查：①手机与电脑连<b>同一 WiFi</b>（看 IP 前两段是否一致）②首次运行时允许 WorkCalendar 通过 Windows 防火墙 ③部分校园/公司 WiFi 有设备隔离，改用<b>手机开热点、电脑连热点</b>即可</div>
+        ${!IS_LOCAL ? `
+        <div class="flex items-center gap-4 flex-wrap pt-1">
+          <div id="pairQr" class="bg-white dark:bg-white p-2 rounded-xl w-32 h-32 flex items-center justify-center shadow-sm shrink-0"><span class="muted">加载中…</span></div>
+          <div class="min-w-0">
+            <div class="text-3xl font-bold tracking-[0.35em] stat-num text-indigo-600 dark:text-indigo-400" id="pairCode">······</div>
+            <div class="muted mt-1">配对码 5 分钟有效，过期点「刷新」</div>
+            <button class="btn btn-ghost !py-1.5 !px-3 text-xs mt-2" onclick="refreshPair()">🔄 刷新配对码</button>
+          </div>
+        </div>
+        <div id="pairStatus" class="muted"></div>` : `
+        <button id="pairScanBtn" class="btn btn-primary" onclick="scanPair()">📷 扫一扫配对</button>
+        <div id="pairStatus" class="muted"></div>`}
+        <input id="syncAddr" class="input font-mono text-xs" placeholder="http://192.168.0.102:17865" value="${esc(localStorage.getItem('wc_sync_addr') || '')}">
+        <div class="flex flex-wrap gap-2">
+          <button id="syncPullBtn" class="btn btn-primary" onclick="syncPull()">📥 从电脑拉取</button>
+          <button id="syncPushBtn" class="btn btn-ghost" onclick="syncPush()">📤 推送到电脑</button>
+        </div>
+        <div id="syncResult" class="muted"></div>
+      </div>
+      <div class="card p-6 space-y-4">
+        <h4 class="font-bold text-sm flex items-center gap-2">🖼️ 外观</h4>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn btn-ghost" onclick="wcPickWallpaper()">🖼️ 设置首页壁纸</button>
+          <button class="btn btn-ghost" onclick="wcClearWallpaper()">恢复默认背景</button>
+        </div>
+        <label class="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input type="checkbox" class="w-4 h-4 accent-indigo-500" onchange="WCPet.set(this.checked)" ${WCPet.isOn() ? 'checked' : ''}> 🐱 桌面宠物（右下角小猫，点它会说话）
+        </label>
+        <div class="muted">壁纸会自动淡化处理，保证内容可读；自定义接口：<code>WCDesk.setWallpaper(dataUrl)</code></div>
+      </div>
+      <div class="card p-6 space-y-4">
+        <h4 class="font-bold text-sm flex items-center gap-2">🎨 偏好</h4>
+        <div class="flex items-center justify-between"><span class="text-sm">深色模式</span>
+          <button class="btn btn-ghost" onclick="toggleTheme()">${S.dark ? '🌙 切到浅色' : '☀️ 切到深色'}</button></div>
+        <div class="muted leading-relaxed">默认缓冲天数 3：未填临期线时自动按「官方截止 − 3 天」算倒计时，可在单条记录里覆盖</div>
+      </div>
+      <div class="card p-6 col-span-2">
+        <h4 class="font-bold text-sm mb-3 flex items-center gap-2">ℹ️ 关于</h4>
+        <div class="text-sm space-y-1.5 muted">
+          <div>版本 0.1.0 · 本地单机工具，数据不出本机 · 全免费开源（Python + pywebview + ECharts）</div>
+          <div>数据目录：<code id="aboutDataDir" class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs"></code></div>
+          <div>数据文件：<code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">data/competitions.json</code>（记事本可直接查看/备份）</div>
+          <div>Agent 端口：<code id="aboutPort" class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs"></code>（写入 data/agent_port.txt）</div>
+          <div>自动备份：每次写数据后备份，保留最近 20 份（data/backups/）· 损坏自动回滚</div>
+        </div>
+      </div>
+    </div>`;
+  $('aboutPort').textContent = S.port;
+  $('aboutDataDir').textContent = S.dataDir || '—';
+  renderImportHistory('impHistory');
+  if (!IS_LOCAL) {
+    refreshPair();
+  } else if ($('pairStatus') && syncPairedUrl()) {
+    $('pairStatus').textContent = '✅ 已配对：' + syncPairedUrl();
+  }
+}
+async function doBackup() {
+  const r = await api('/api/backup', { method: 'POST' });
+  toast('已备份：' + r.backup);
+  $('backupInfo').textContent = '最近备份：' + r.backup;
+}
+/* ---------- AI 助手（聊天） ---------- */
+S.ai = { messages: [], cfg: null, busy: false, attach: [] };
+function aiFitHeight() {
+  const view = $('view-ai'), ma = $('mainArea');
+  if (view && ma && !view.classList.contains('hidden')) {
+    view.style.height = Math.max(320, ma.clientHeight - 48) + 'px';
+  }
+}
+function renderAi() {
+  $('view-ai').innerHTML = `
+    <div class="flex flex-col" style="height:calc(100dvh - 140px)">
+      <div class="flex items-center gap-3 mb-3">
+        <h3 class="font-bold text-lg flex items-center gap-2"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>🤖 AI 助手</h3>
+        <span id="aiBadge" class="badge bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300">加载中…</span>
+        <div class="flex-1"></div>
+        <button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="aiToggleCfg()">⚙️ 接口设置</button>
+        <button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="aiClear()">🧹 清空会话</button>
+      </div>
+      <div id="aiCfgPanel" class="card p-4 mb-3 hidden">
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">服务商</label>
+            <select id="aiProvider" class="input" onchange="aiProviderChange()">
+              <option value="deepseek">DeepSeek</option>
+              <option value="glm">智谱 GLM</option>
+              <option value="mimo">小米 MiMo（硅基流动）</option>
+              <option value="custom">自定义（OpenAI 兼容）</option>
+            </select>
+            <div id="aiProvHint" class="muted mt-1.5 hidden" style="line-height:1.6">⚠️ 该接口没有联网搜索：把官网/报名页<b>链接</b>发给 AI，它会用 fetch_page 抓取正文核实整理。想要自动检索请选智谱 GLM 并开启联网搜索。</div></div>
+          <div><label class="label">模型</label><input id="aiModel" class="input" placeholder="deepseek-chat"></div>
+          <div class="col-span-2"><label class="label">接口地址 base_url</label><input id="aiBase" class="input font-mono text-xs" placeholder="https://api.deepseek.com"></div>
+          <div class="col-span-2"><label class="label">API Key</label><input id="aiKey" type="password" class="input font-mono text-xs" placeholder="sk-…（只存本机 data/ai_config.json）"></div>
+          <div id="aiWsRow" class="col-span-2 hidden"><label class="flex items-center gap-2 text-sm cursor-pointer select-none"><input id="aiWs" type="checkbox" class="w-4 h-4 accent-indigo-500"> 🌐 启用智谱服务端联网搜索（web_search，AI 可自动检索比赛信息）</label></div>
+        </div>
+        <div class="flex items-center gap-3 mt-3">
+          <button class="btn btn-primary !py-2" onclick="aiSaveCfg()">💾 保存配置</button>
+          <span class="muted" id="aiCfgHint"></span>
+        </div>
+      </div>
+      <div id="aiChat" class="flex-1 overflow-y-auto pr-1 space-y-3 mb-3"></div>
+      <div id="aiAttachPrev" class="flex gap-2 mb-2 flex-wrap hidden"></div>
+      <div class="flex gap-2 items-end">
+        <button class="btn btn-ghost !py-2.5 !px-3.5" onclick="pickAiImage()" title="发获奖证书图片给 AI 识别（需视觉模型，如 glm-4v-flash / MiMo-VL）" aria-label="添加图片">📎</button>
+        <input id="aiImgInput" type="file" accept="image/*,.csv,.tsv,.txt,.md,.json,.xlsx,.xls" multiple class="hidden" onchange="aiAddFiles(this)">
+        <textarea id="aiInput" class="input flex-1 !py-2.5 resize-none" placeholder="例如：帮我加一个比赛，2026 年 11 月 1 日截止 / 最近有什么快截止的？（Enter 发送）"></textarea>
+        <button id="aiSendBtn" class="btn btn-primary !py-2.5 !px-5" onclick="aiSend()">发送</button>
+      </div>
+    </div>`;
+  const box = $('aiChat');
+  box.addEventListener('click', e => { if (e.target === box) $('aiInput').focus(); });
+  $('aiInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); }
+  });
+  renderAiMsgs();
+  aiLoadCfg();
+  requestAnimationFrame(aiFitHeight);
+}
+function aiToggleCfg() { $('aiCfgPanel').classList.toggle('hidden'); }
+function aiProviderChange() {
+  const v = $('aiProvider').value;
+  const p = S.ai.cfg?.providers?.[v];
+  if (p) { $('aiBase').value = p.base_url || ''; $('aiModel').value = p.model || ''; }
+  $('aiWsRow').classList.toggle('hidden', v !== 'glm');
+  $('aiProvHint').classList.toggle('hidden', v === 'glm');
+}
+function aiProvHintUpdate() {
+  const v = S.ai.cfg?.provider || 'deepseek';
+  if ($('aiProvHint')) $('aiProvHint').classList.toggle('hidden', v === 'glm');
+}
+async function aiLoadCfg() {
+  try {
+    S.ai.cfg = await api('/api/ai_config');
+  } catch (e) { S.ai.cfg = null; }
+  aiRenderBadge();
+  if (S.ai.cfg) {
+    $('aiProvider').value = S.ai.cfg.provider;
+    aiProvHintUpdate();
+    $('aiBase').value = S.ai.cfg.base_url || '';
+    $('aiModel').value = S.ai.cfg.model || '';
+    $('aiWs').checked = S.ai.cfg.web_search !== false;
+    $('aiWsRow').classList.toggle('hidden', S.ai.cfg.provider !== 'glm');
+  }
+  if (S.ai.cfg && !S.ai.cfg.has_key) {
+    $('aiCfgPanel').classList.remove('hidden');
+    $('aiCfgHint').innerHTML = '尚未配置 API Key。申请地址：' + (S.ai.cfg.key_url || '');
+  }
+}
+function aiRenderBadge() {
+  const c = S.ai.cfg;
+  $('aiBadge').textContent = c ? (c.provider_label + ' · ' + c.model + (c.has_key ? '' : ' · 未配置 Key')) : '不可用';
+}
+async function aiSaveCfg() {
+  const body = {
+    provider: $('aiProvider').value,
+    model: $('aiModel').value.trim(),
+    base_url: $('aiBase').value.trim(),
+    web_search: $('aiWs').checked,
+  };
+  const key = $('aiKey').value.trim();
+  if (key) body.api_key = key;
+  try {
+    S.ai.cfg = await api('/api/ai_config', { method: 'POST', body });
+    $('aiKey').value = '';
+    $('aiCfgHint').textContent = '已保存 ✅';
+    aiRenderBadge();
+    toast('AI 接口配置已保存');
+  } catch (e) { toast('保存失败：' + e.message, 'err'); }
+}
+function aiClear() {
+  S.ai.messages = [];
+  try { localStorage.removeItem('wc_ai_chat'); } catch (e) {}
+  renderAiMsgs();
+}
+function aiRenderAttach() {
+  const prev = $('aiAttachPrev'); if (!prev) return;
+  prev.classList.toggle('hidden', !S.ai.attach.length);
+  prev.innerHTML = S.ai.attach.map((a, i) => {
+    if (a.kind === 'image') return `
+    <div class="relative"><img src="${a.dataUrl}" style="width:64px;height:64px;object-fit:cover" class="rounded-xl border border-slate-200 dark:border-slate-600">
+    <button class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-800 text-white text-[10px]" onclick="aiRmAttach(${i})">✕</button></div>`;
+    return `
+    <div class="relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs">
+      <span>📄 ${esc(a.name || '表格')}</span>
+      <button class="text-slate-400 hover:text-rose-500" onclick="aiRmAttach(${i})">✕</button>
+    </div>`;
+  }).join('') + `<div class="muted self-center text-[11px]">图片需视觉模型；表格 AI 会逐行整理录入</div>`;
+}
+function aiRmAttach(i) { S.ai.attach.splice(i, 1); aiRenderAttach(); }
+function pickAiImage() { const inp = $('aiImgInput'); if (inp) inp.click(); }
+async function aiAddFiles(input) {
+  for (const f of (input.files || [])) {
+    if (S.ai.attach.length >= 6) { toast('一次最多 6 个附件', 'warn'); break; }
+    try { S.ai.attach.push(await aiMakeAttachment(f)); }
+    catch (e) { toast(e.message || '读取失败', 'err'); }
+  }
+  input.value = '';
+  aiRenderAttach();
+}
+function renderAiMsgs() {
+  const box = $('aiChat'); if (!box) return;
+  if (!S.ai.messages.length) {
+    box.innerHTML = `
+      <div class="text-center muted py-6">和 AI 说句话，它可以直接帮你查、加、改、删比赛和获奖。<br>删除操作 AI 会先跟你确认。</div>
+      <div class="flex flex-wrap gap-2 justify-center">
+        ${['最近有什么快截止的？', '帮我加一个比赛：2026 全国大学生工业设计大赛，11 月 1 日截止', '把含「包装」的比赛都列出来', '本周要做什么？'].map(t =>
+      `<button class="chip chip-off" onclick="aiQuick(this.textContent)">${t}</button>`).join('')}
+      </div>`;
+    return;
+  }
+  box.innerHTML = S.ai.messages.map(m => {
+    if (m.role === 'user') {
+      const imgs = (m.images || []).map(u => `<img src="${u}" style="width:120px;height:120px;object-fit:cover" class="rounded-xl mt-1.5">`).join('');
+      return `<div class="flex justify-end"><div class="max-w-[80%] bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm px-4 py-2.5 rounded-2xl rounded-br-md shadow-md shadow-indigo-500/20 whitespace-pre-wrap break-words">${esc(m.content)}${imgs}</div></div>`;
+    }
+    const trace = (m.trace || []).map(t => `<div class="muted mt-1">🔧 ${esc(t.tool)}</div>`).join('');
+    return `<div class="flex justify-start"><div class="max-w-[80%] card p-3.5 text-sm whitespace-pre-wrap break-words">${esc(m.content)}${trace}</div></div>`;
+  }).join('') + (S.ai.busy ? `<div class="flex justify-start"><div class="card px-4 py-2.5 text-sm muted">⏳ <span id="aiBusyText">思考中…</span></div></div>` : '');
+  box.scrollTop = box.scrollHeight;
+}
+function aiQuick(t) { $('aiInput').value = t; aiSend(); }
+function aiSetBusy(text) { const el = $('aiBusyText'); if (el) el.textContent = text; }
+async function aiSend() {
+  if (S.ai.busy) return;
+  const input = $('aiInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const attach = S.ai.attach.slice();
+  const images = attach.filter(a => a.kind === 'image').map(a => a.dataUrl);
+  const tables = attach.filter(a => a.kind === 'table');
+  let fullText = text;
+  for (const t of tables) fullText += `
+
+【附件文件 ${t.name} 的内容】
+${t.text}`;
+  S.ai.messages.push({ role: 'user', content: fullText, images, tables: tables.map(t => t.name) });
+  S.ai.attach = [];
+  aiRenderAttach();
+  S.ai.busy = true;
+  renderAiMsgs();
+  try {
+    const toSend = S.ai.messages.slice(-20).map(m => {
+      if (m.role === 'user' && m.images?.length) {
+        return { role: 'user', content: [{ type: 'text', text: m.content || '请识别这张图片' },
+          ...m.images.map(u => ({ type: 'image_url', image_url: { url: u } }))] };
+      }
+      return { role: m.role, content: m.content };
+    });
+    let r = null;
+    try {
+      /* 异步任务 + 轮询：实时轮播 AI 工作状态 */
+      const j = await api('/api/ai_chat_async', { method: 'POST', body: { messages: toSend } });
+      if (j.job_id) {
+        const t0 = Date.now();
+        let timeoutHit = false;
+        for (;;) {
+          await new Promise(res => setTimeout(res, 700));
+          const sec = Math.round((Date.now() - t0) / 1000);
+          if (sec > 600) { timeoutHit = true; break; }  /* 150s 兜底：后台可能仍在跑 */
+          const st = await api('/api/ai_status?id=' + encodeURIComponent(j.job_id));
+          if (!st.running) {
+            /* 完成后结果平铺在响应顶层：ok / reply / trace / error */
+            r = { ok: !!st.ok, reply: st.reply, trace: st.trace, error: st.error };
+            if (!r.ok && !r.error) r = { ok: false, error: '任务结束但无结果' };
+            break;
+          }
+          aiSetBusy((st.status || '处理中…') + ' · ' + sec + 's');
+        }
+        if (timeoutHit && !r) {
+          S.ai.messages.push({ role: 'assistant', content: '⏳ 联网搜索耗时较长，仍在后台处理中。'
+            + '请先检查数据变化，避免重复提交同一录入请求。' });
+        }
+        if (timeoutHit && !r) r = { skipped: true };
+      }
+    } catch (e) {
+      if (!/404|未知路径|ai_chat_async/.test(e.message)) throw e;  /* 旧版 exe 回退同步 */
+    }
+    if (!r) r = await api('/api/ai_chat', { method: 'POST', body: { messages: toSend } });
+    if (r.ok) S.ai.messages.push({ role: 'assistant', content: r.reply, trace: r.trace });
+    /* 识别建档后：把本次上传的图片自动存为该获奖记录的凭证 */
+    const awardTrace = (r.trace || []).find(t => t.tool === 'add_award' && t.result_id);
+    if (awardTrace && images.length) {
+      const saved = await aiAttachCerts(awardTrace.result_id, images);
+      if (saved.length) toast('证书图片已存为凭证：' + saved.join('、'));
+    }
+    else {
+      const raw = r.raw ? ('原始响应: ' + String(r.raw).slice(0, 180)) : '';
+      S.ai.messages.push({ role: 'assistant', content: '⚠️ ' + (r.error || '未知错误') + (raw ? '\n🔍 ' + raw : '') });
+    }
+      reportClientError('AI 任务失败: ' + (r.error || '未知错误') + ' | ' + (r.raw || ''));
+    if (r.trace?.some(t => ['add_competition', 'update_competition', 'delete_competition'].includes(t.tool))) refresh();
+  } catch (e) {
+    S.ai.messages.push({ role: 'assistant', content: '⚠️ ' + e.message });
+    reportClientError('AI 发送失败: ' + e.message, e.stack);
+  } finally {
+    S.ai.busy = false;
+    renderAiMsgs();
+    try { localStorage.setItem('wc_ai_chat', JSON.stringify(S.ai.messages.slice(-50).map(m => ({ role: m.role, content: m.content, trace: m.trace, tables: m.tables })))); } catch (e) {}
+  }
+}
+async function openExportFolder() {
+  try { const r = await api('/api/open_folder', { method: 'POST', body: { target: 'exports' } }); toast('已打开：' + r.path); }
+  catch (e) { toast('打开失败：' + e.message, 'err'); }
+}
+async function openLogsFolder() {
+  try { const r = await api('/api/open_folder', { method: 'POST', body: { target: 'logs' } }); toast('已打开：' + r.path); }
+  catch (e) { toast('打开失败：' + e.message, 'err'); }
+}
+async function exportLogsZip() {
+  try {
+    const r = await api('/api/export_logs', { method: 'POST' });
+    toast('日志已导出：' + r.path);
+    const bi = $('backupInfo'); if (bi) bi.textContent = '日志已导出：' + r.path;
+  } catch (e) { toast('导出失败：' + e.message, 'err'); }
+}
+function toggleTheme() {
+  S.dark = !S.dark;
+  document.documentElement.classList.toggle('dark', S.dark);
+  const sun = $('themeSun'), moon = $('themeMoon');
+  if (sun && moon) { sun.classList.toggle('hidden', !S.dark); moon.classList.toggle('hidden', S.dark); }
+  localStorage.setItem('ds_theme', S.dark ? 'dark' : 'light');
+  try { applyWallpaper(); } catch (e) {}  // 深浅色下壁纸淡色不同，重新套色
+  render();  // 重建图表配色
+}
+
+/* ---------- 详情抽屉 ---------- */
+async function openDetail(id) {
+  // 优先用列表已缓存数据（省一次请求）；不在列表（被筛选掉）时再拉取
+  let c = S.comps.find(x => x.id === id);
+  if (!c) c = (await api('/api/competitions/' + id)).competition;
+  const ms = (c.milestone_countdowns || []).map(m => {
+    const cls = m.days < 0 ? 'text-slate-400' : m.days <= 3 ? 'text-rose-600 font-bold' : m.days <= 7 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300';
+    return `<div class="flex items-center justify-between py-2 border-b border-slate-100 dark:border-slate-700 last:border-0">
+      <span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>${esc(m.name)}<span class="muted">${m.date}</span></span>
+      <span class="${cls}">${m.days < 0 ? '已过 ' + (-m.days) + ' 天' : '剩 ' + m.days + ' 天'}</span></div>`;
+  }).join('') || '<div class="muted py-2">无</div>';
+  const sub = c.submission || {};
+  const fmt = c.format || {};
+  const del = (c.deliverables || []).map(d => `<li class="flex gap-2"><span class="text-indigo-400">▸</span><span>${esc(d)}</span></li>`).join('');
+  $('drawerPanel').innerHTML = `
+    <div class="h-24 bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 relative px-6 pt-5 pb-4">
+      <div class="absolute right-4 top-4"><button class="w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 backdrop-blur flex items-center justify-center text-sm transition-colors" onclick="closeDrawer()">✕</button></div>
+      <div class="text-white/70 text-xs mb-1">${esc(c.category || '未分类')}${c.organizer ? ' · ' + esc(c.organizer) : ''}</div>
+      <h2 class="text-xl font-bold text-white leading-snug pr-8">${esc(c.name)}</h2>
+      <div class="flex gap-2 mt-2.5">${statusBadge(c)} ${countdownBadge(c)}</div>
+    </div>
+    <div class="p-6">
+    ${safeUrl(c.website) ? `<a class="text-indigo-600 dark:text-indigo-400 text-sm underline hover:text-indigo-700" href="${esc(safeUrl(c.website))}" target="_blank" rel="noopener">🔗 官网入口 →</a>` : ''}
+    <div class="grid grid-cols-2 gap-3 mt-4">
+      <div class="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 p-4">
+        <div class="muted mb-1">⏰ 临期线（要赶的）</div>
+        <div class="text-xl font-bold text-rose-600 dark:text-rose-400">${c.suggested_deadline}</div>
+        ${c.suggested_deadline !== c.deadline ? '<div class="muted text-[11px] mt-1">官方截止前预留缓冲</div>' : ''}</div>
+      <div class="rounded-2xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-600 p-4">
+        <div class="muted mb-1">📌 官方截止</div>
+        <div class="text-xl font-bold">${c.deadline}</div>
+        ${c.deadline_note ? `<div class="muted text-[11px] mt-1">${esc(c.deadline_note)}</div>` : ''}</div>
+    </div>
+    ${c.signup_start || c.signup_end ? `<div class="muted mt-2 text-xs">报名：${c.signup_start ? fmtDate(c.signup_start) : '—'} → ${c.signup_end ? fmtDate(c.signup_end) : '—'}</div>` : ''}
+    <div class="mt-5"><h4 class="font-bold text-sm mb-1.5 flex items-center gap-2"><span class="w-1 h-3.5 rounded-full bg-amber-400 inline-block"></span>提交链路（里程碑）</h4>${ms}</div>
+    <div class="mt-5"><h4 class="font-bold text-sm mb-1.5 flex items-center gap-2"><span class="w-1 h-3.5 rounded-full bg-indigo-500 inline-block"></span>作品要求</h4>
+      <div class="text-sm whitespace-pre-wrap leading-relaxed">${esc(c.requirements) || '<span class="muted">未填写</span>'}</div>
+      ${del ? `<ul class="text-sm space-y-1 mt-2">${del}</ul>` : ''}</div>
+    <div class="mt-5"><h4 class="font-bold text-sm mb-1.5 flex items-center gap-2"><span class="w-1 h-3.5 rounded-full bg-emerald-500 inline-block"></span>📮 去哪交</h4>
+      <div class="text-sm space-y-1.5 leading-relaxed">
+        <div class="flex gap-2"><span class="muted shrink-0">方式</span><span>${esc(sub.method) || '<span class="muted">未填写</span>'}</span></div>
+        <div class="flex gap-2 items-start"><span class="muted shrink-0">入口</span><span class="break-all">${sub.target ? `<span class="font-mono text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">${esc(sub.target)}</span> <button class="btn btn-ghost !py-0.5 !px-2 text-[10px]" onclick="copyText('${esc(sub.target).replace(/'/g, "\\'")}')">复制</button>` : '<span class="muted">未填写</span>'}</span></div>
+        ${sub.contact ? `<div class="flex gap-2"><span class="muted shrink-0">联系</span><span>${esc(sub.contact)}</span></div>` : ''}
+        ${sub.fee ? `<div class="flex gap-2"><span class="muted shrink-0">费用</span><span>${esc(sub.fee)}</span></div>` : ''}
+        ${sub.note ? `<div class="muted">${esc(sub.note)}</div>` : ''}
+      </div></div>
+    <div class="mt-5"><h4 class="font-bold text-sm mb-1.5 flex items-center gap-2"><span class="w-1 h-3.5 rounded-full bg-sky-500 inline-block"></span>📐 格式</h4>
+      <div class="text-sm space-y-1.5">
+        <div class="flex gap-2"><span class="muted shrink-0">类型</span><span>${esc((fmt.file_types || []).join(', ')) || '<span class="muted">未填写</span>'}</span></div>
+        ${fmt.max_size_mb ? `<div class="flex gap-2"><span class="muted shrink-0">上限</span><span>${fmt.max_size_mb} MB</span></div>` : ''}
+        ${fmt.naming ? `<div class="flex gap-2 items-start"><span class="muted shrink-0">命名</span><span class="font-mono text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">${esc(fmt.naming)}</span> <button class="btn btn-ghost !py-0.5 !px-2 text-[10px]" onclick="copyText('${esc(fmt.naming).replace(/'/g, "\\'")}')">复制</button></div>` : ''}
+        ${fmt.note ? `<div class="muted">${esc(fmt.note)}</div>` : ''}
+      </div></div>
+    ${(c.tags || []).length ? `<div class="mt-4 flex gap-1.5 flex-wrap">${c.tags.map(t => `<span class="badge bg-amber-50 text-amber-600 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700">#${esc(t)}</span>`).join('')}</div>` : ''}
+    ${c.notes ? `<div class="mt-3 text-sm"><span class="muted">备注：</span>${esc(c.notes)}</div>` : ''}
+    ${c.source_url ? `<div class="muted mt-2 text-xs">来源：<a class="underline" href="${esc(safeUrl(c.source_url))}" target="_blank" rel="noopener">${esc(c.source_url)}</a></div>` : ''}
+    <div class="flex flex-wrap gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+      <button class="btn btn-primary" onclick="setOverride('${c.id}','submitted')">✓ 标记已提交</button>
+      <button class="btn btn-ghost" onclick="setOverride('${c.id}','done')">🏁 已完成</button>
+      <button class="btn btn-ghost" onclick="setOverride('${c.id}','abandoned')">🚫 放弃</button>
+      <button class="btn btn-ghost" onclick="openForm('${c.id}')">✏️ 编辑</button>
+      <button class="btn btn-danger" onclick="delComp('${c.id}')">🗑 删除</button>
+    </div>
+    </div>`;
+  $('drawer').classList.remove('hidden');
+}
+function closeDrawer() { $('drawer').classList.add('hidden'); }
+function copyText(t) { navigator.clipboard?.writeText(t).then(() => toast('已复制'), () => toast('复制失败', 'err')); }
+async function setOverride(id, s) {
+  await api('/api/competitions/' + id, { method: 'PUT', body: { status_override: s } });
+  toast(s === 'submitted' ? '已标记为已提交 🎉' : s === 'done' ? '已完成 🏁' : '已标记放弃');
+  closeDrawer(); refresh();
+}
+async function delComp(id) {
+  if (!confirm('确定删除这条比赛？删除前会自动备份。')) return;
+  await api('/api/competitions/' + id, { method: 'DELETE' });
+  toast('已删除'); closeDrawer(); refresh();
+}
+
+/* ---------- 添加/编辑表单 ---------- */
+async function openForm(id) {
+  S.editingId = id || null;
+  $('formTitle').textContent = id ? '✏️ 编辑比赛' : '＋ 添加比赛';
+  const f = id ? (await api('/api/competitions/' + id)).competition : {};
+  $('f_name').value = f.name || ''; $('f_deadline').value = f.deadline || '';
+  $('f_suggested').value = f.suggested_deadline && f.suggested_deadline !== f.deadline ? f.suggested_deadline : '';
+  $('f_buffer').value = f.deadline_buffer_days ?? ''; $('f_category').value = f.category || '';
+  $('f_organizer').value = f.organizer || ''; $('f_website').value = f.website || '';
+  $('f_signup_start').value = f.signup_start || ''; $('f_signup_end').value = f.signup_end || '';
+  $('f_requirements').value = f.requirements || '';
+  $('f_deliverables').value = (f.deliverables || []).join('\n');
+  $('f_sub_method').value = f.submission?.method || ''; $('f_sub_target').value = f.submission?.target || '';
+  $('f_sub_fee').value = f.submission?.fee || ''; $('f_sub_contact').value = f.submission?.contact || '';
+  $('f_fmt_types').value = (f.format?.file_types || []).join(', '); $('f_fmt_size').value = f.format?.max_size_mb ?? '';
+  $('f_fmt_naming').value = f.format?.naming || '';
+  $('f_milestones').value = (f.milestones || []).map(m => `${m.name}:${m.date}`).join('\n');
+  $('f_notes').value = f.notes || '';
+  $('formModal').classList.remove('hidden');
+}
+function closeForm() { $('formModal').classList.add('hidden'); S.editingId = null; }
+async function submitForm() {
+  const name = $('f_name').value.trim(), deadline = $('f_deadline').value;
+  if (!name || !deadline) return toast('名称和官方截止是必填项', 'warn');
+  const suggested = $('f_suggested').value || null;
+  if (suggested && suggested > deadline) return toast('临期线不能晚于官方截止', 'warn');
+  const body = {
+    name, deadline,
+    suggested_deadline: suggested,
+    deadline_buffer_days: $('f_buffer').value !== '' ? Number($('f_buffer').value) : null,
+    category: $('f_category').value.trim(), organizer: $('f_organizer').value.trim(), website: $('f_website').value.trim(),
+    signup_start: $('f_signup_start').value || null, signup_end: $('f_signup_end').value || null,
+    requirements: $('f_requirements').value,
+    deliverables: $('f_deliverables').value.split('\n').map(s => s.trim()).filter(Boolean),
+    submission: {
+      method: $('f_sub_method').value.trim(), target: $('f_sub_target').value.trim(),
+      fee: $('f_sub_fee').value.trim(), contact: $('f_sub_contact').value.trim(),
+    },
+    format: {
+      file_types: $('f_fmt_types').value.split(',').map(s => s.trim()).filter(Boolean),
+      max_size_mb: $('f_fmt_size').value !== '' ? Number($('f_fmt_size').value) : null,
+      naming: $('f_fmt_naming').value.trim(),
+    },
+    milestones: $('f_milestones').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+      const [n, ...rest] = l.split(':'); return { name: n.trim(), date: rest.join(':').trim() };
+    }),
+    notes: $('f_notes').value,
+  };
+  try {
+    if (S.editingId) await api('/api/competitions/' + S.editingId, { method: 'PUT', body });
+    else await api('/api/competitions', { method: 'POST', body });
+    toast(S.editingId ? '已保存' : '已添加 🎉'); closeForm(); refresh();
+  } catch (e) { toast('保存失败：' + e.message, 'err'); }
+}
+
+/* ---------- 筛选联动 / 初始化 ---------- */
+function fillFilterOptions() {
+  const cats = new Set((S.comps || []).map(c => c.category).filter(Boolean));
+  $('catFilter').innerHTML = '<option value="">全部类别</option>' + [...cats].map(c => `<option ${S.filter.cats.includes(c) ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  const statuses = [['', '全部状态'], ['urgent', '🚨 即将截止'], ['past_suggested', '⚠️ 已过临期线'], ['submitting', '进行中'], ['open', '报名中'], ['not_started', '未开始'], ['overdue', '已截止'], ['submitted', '已提交'], ['done', '已完成'], ['abandoned', '已放弃']];
+  $('statusFilter').innerHTML = statuses.map(([v, l]) => `<option value="${v}" ${S.filter.statuses.includes(v) && v ? 'selected' : ''}>${l}</option>`).join('');
+  const dl = $('catList'); if (dl) dl.innerHTML = [...cats].map(c => `<option value="${esc(c)}">`).join('');
+}
+let searchDebounce = null;
+$('searchBox').addEventListener('input', e => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => { S.filter.keyword = e.target.value; refresh(); }, 250);
+});
+/* 快捷键：Ctrl+K / Ctrl+F 聚焦搜索 */
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' ||
+      (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    e.preventDefault();
+    $('searchBox').focus(); $('searchBox').select();
+  }
+});
+$('catFilter').addEventListener('change', e => { S.filter.cats = e.target.value ? [e.target.value] : []; refresh(); });
+$('statusFilter').addEventListener('change', e => { S.filter.statuses = e.target.value ? [e.target.value] : []; refresh(); });
+window.__onImport = () => { refresh(); toast('检测到新文件导入，已刷新'); };
+
+(async function init() {
+  S.dark = new URLSearchParams(location.search).get('dark') === '1'
+    ? true : localStorage.getItem('ds_theme') === 'dark';
+  document.documentElement.classList.toggle('dark', S.dark);
+  const sun0 = $('themeSun'), moon0 = $('themeMoon');
+  if (sun0 && moon0) { sun0.classList.toggle('hidden', !S.dark); moon0.classList.toggle('hidden', S.dark); }
+  const initialView = (location.hash || '#overview').slice(1);
+  if (['overview', 'list', 'timeline', 'charts', 'ai', 'awards', 'import', 'settings'].includes(initialView)) {
+    S.view = initialView;
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === initialView));
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('hidden', v.id !== 'view-' + initialView));
+  }
+  try {
+    const h = await api('/api/health');
+    S.port = h.port ?? (location.port || '');
+    S.dataDir = h.data_dir || '';
+  } catch (e) { S.port = location.port || ''; }
+  try { S.importHistory = JSON.parse(localStorage.getItem('wc_import_history') || '[]') || []; } catch (e) { S.importHistory = []; }
+  try { S.ai.messages = JSON.parse(localStorage.getItem('wc_ai_chat') || '[]') || []; } catch (e) {}
+  await refresh();
+  refreshAwards().catch(() => {});
+  setInterval(() => { refresh().catch(() => {}); refreshAwards().catch(() => {}); }, 60000);  // 60s 静默刷新
+})().catch(e => { console.error(e); window.alert('启动未完成：' + (e.message || e) + '\n请保留数据目录，勿卸载或清空数据。'); });
+</script>
+</body>
+</html>

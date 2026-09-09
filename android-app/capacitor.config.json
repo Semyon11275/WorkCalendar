@@ -1,0 +1,11 @@
+{
+  "appId": "com.mech.workcalendar",
+  "appName": "工作日历",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

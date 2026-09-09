@@ -77,4 +77,3 @@ Copyright (c) 2026 Varsha32。
 本项目自有代码以 **Apache License 2.0 + Commons Clause License Condition 1.0** 提供，见 `LICENSE`。这是 **source-available（源码可用）**，不是 OSI 定义的开源许可。销售限制以 Commons Clause 对 “Sell” 的定义为准，并非禁止所有商业使用。
 
 第三方组件按各自原许可证提供，不因本项目的 Commons Clause 而重新授权。见 `THIRD_PARTY_NOTICES.md` 与 `LICENSES/`。
-

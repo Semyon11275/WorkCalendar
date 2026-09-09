@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 构建产物
+build/
+dist/
+*.spec.bak
+
+# 运行时数据（用户数据，不入库）
+data/
+.demo/
+
+# 编辑器/系统
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# 临时备份（验证通过后不入库）
+*.bak_*
+index_backup_*.html
+
+webview_data/
+node_modules/
+.gradle/
+local.properties
+*.jks
+*.keystore
+*.p12
+*.apk
+*.exe
+*.zip
+*.corrupt
+.env*
+!.env.example

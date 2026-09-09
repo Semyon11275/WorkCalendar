@@ -1,0 +1,21 @@
+{
+  "version": "0.4.2",
+  "author": "Varsha32",
+  "artifacts": [
+    {
+      "file": "WorkCalendar-Windows-x64-v0.4.2.zip",
+      "bytes": 20193610,
+      "sha256": "8c2c1e3dee9569556958e919328780dde65e400fe9127a6f8c533d53d383813b"
+    },
+    {
+      "file": "WorkCalendar-Source-v0.4.2.zip",
+      "bytes": 1788990,
+      "sha256": "8414d2c8bd4fd74461886c7eea39e65397275e733000cd932a9685b2aa7eb56b"
+    },
+    {
+      "file": "WorkCalendar-Android-v0.4.2.apk",
+      "bytes": 14891370,
+      "sha256": "fee5e115655f8b3ca492ed850903910b4bea52efc1ce2bc91d6a3702dd3e4fa5"
+    }
+  ]
+}
