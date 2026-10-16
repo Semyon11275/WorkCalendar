@@ -1,12 +1,14 @@
 /* ================= PC 右键/快捷键复制支持 =================
-   背景：桌面版 WebView2 在非 debug 模式下禁用了原生右键菜单
-   （pywebview EdgeChromium: AreDefaultContextMenusEnabled = debug），
-   导致图片、文字都无法直接复制。
-   这里补一个自定义右键菜单 + Ctrl+C/Ctrl+A 兜底：
-   - 图片：复制为位图（可直接粘贴到微信/文档），或复制图片地址
+   背景：桌面版有两层限制——
+   1) pywebview 默认 text_select=False，注入 body{user-select:none}，
+      页面所有文字无法选中（exe 端 Python 无法热改，这里用 !important 反转）；
+   2) WebView2 非 debug 模式禁用原生右键菜单
+      （AreDefaultContextMenusEnabled = debug），右键复制不可用。
+   本文件统一解决：
+   - 文字：恢复鼠标拖选（body user-select:text），Ctrl+C/Ctrl+A 兜底
+   - 图片：复制为位图（可直接粘贴到微信/文档）或复制地址；恢复原生拖出
    - 图表（canvas）：复制为 PNG
-   - 文字：选中后右键或 Ctrl+C 复制；Ctrl+A 全选
-   - 链接：复制链接地址
+   - 右键菜单：文字/图片/图表/链接/输入内容按上下文提供复制项
    注意：文件放在 assets/ 下是因为后端静态白名单只放行
    /assets/ 前缀与 core.js 等既有文件，旧版 exe 无需重打包即可加载。 */
 (function () {
@@ -15,6 +17,29 @@
   window.__wcCopyMenuReady = true;
 
   var curMenu = null;
+
+  /* ---------- 恢复全页文字可选 ----------
+     pywebview 在 document-created 阶段向 head 追加
+     body{user-select:none;cursor:default}（无 !important），
+     这里加载时机更晚，用 !important 反转；同时给控件类补回不可选中，
+     与原生应用一致（按钮/导航标签不是可复制内容）。 */
+  (function enableTextSelection() {
+    var st = document.createElement('style');
+    st.id = 'wcSelectStyle';
+    st.textContent = [
+      'body{-webkit-user-select:text !important;user-select:text !important;cursor:auto !important;}',
+      '.select-none{-webkit-user-select:none !important;user-select:none !important;}'
+    ].join('');
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  /* ---------- 恢复图片/链接原生拖拽 ----------
+     pywebview 默认 draggable=False，会在 document 冒泡阶段对 IMG/A 的
+     dragstart preventDefault。这里在捕获阶段截断传播，使其监听不再触发，
+     原生拖拽（拖图到聊天窗口/资源管理器）恢复；不影响默认行为本身。 */
+  document.addEventListener('dragstart', function (e) {
+    e.stopPropagation();
+  }, true);
 
   function ensureStyle() {
     if (document.getElementById('wcCopyMenuStyle')) return;

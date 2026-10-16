@@ -1,8 +1,11 @@
 # 0.4.3（开发中）
 
-- PC 端支持图片与文字直接复制：自定义右键菜单（复制图片位图/图片地址/图表为图片/文字/链接/输入内容），
-  补上 WebView2 非 debug 模式禁用原生右键菜单的缺口；Ctrl+C/Ctrl+A 键盘兜底同步补齐
-  （新增 web/assets/copy_menu.js，旧版 exe 热修可直接替换 web 目录）。
+- PC 端支持图片与文字直接复制（新增 web/assets/copy_menu.js，旧版 exe 热修可直接替换 web 目录）：
+  - 恢复全页文字鼠标拖选：pywebview 默认 text_select=False 会注入 body{user-select:none}，
+    用 !important 反转；按钮/导航等控件保持不可选
+  - 自定义右键菜单：复制图片位图/图片地址/图表为图片/文字/链接/输入内容，
+    补上 WebView2 非 debug 模式禁用原生右键菜单的缺口
+  - Ctrl+C/Ctrl+A 键盘兜底；恢复图片/链接原生拖出（pywebview 默认拦截 dragstart）
 
 # 0.4.2
 
