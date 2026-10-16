@@ -1,0 +1,22 @@
+// Optional: install Playwright and Edge, sync web assets, then run with node. Uses isolated synthetic data.
+const {chromium}=require('playwright');
+const fs=require('fs'),path=require('path'),http=require('http'),assert=require('assert/strict');
+fs.mkdirSync(path.resolve(__dirname,'../build'),{recursive:true});
+const root=path.resolve(__dirname,'../android-app/www');
+const server=http.createServer((req,res)=>{let p=path.join(root,decodeURIComponent(req.url.split('?')[0]));if(req.url==='/')p=path.join(root,'index.html');try{res.setHeader('Content-Type',p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':p.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(p))}catch{res.writeHead(404);res.end()}});
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+try{browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message)});page.on('dialog',d=>d.dismiss());
+const awards=[1,2].map(i=>({id:'test'+i,name:'测试获奖 '+i,competition:'全国大学生艺术设计大赛——长标题触控区域验证',level:'国家级',award_date:'2026-10-17',certificate_files:[]}));
+await page.route('**/api/**',route=>{let p=new URL(route.request().url()).pathname;let d={ok:true};if(p==='/api/bootstrap')d={token:'isolated-test-token'};if(p==='/api/competitions')d={competitions:[]};if(p==='/api/stats')d={upcoming:[],months:[],weeks:[],today:'2026-10-17',by_status:{},by_category:{},due_in_7:0,completed:0};if(p==='/api/awards')d={awards};if(p==='/api/awards/stats')d={total:2,by_level:{},first_author:0};return route.fulfill({json:d})});
+await page.goto('http://127.0.0.1:'+server.address().port+'/#awards');await page.waitForFunction(()=>window.__wcMobileMotion);await page.evaluate(()=>refreshAwards());await page.evaluate(()=>go('awards'));await page.locator('#awh_0').waitFor();await page.waitForTimeout(500);
+let box=await page.locator('#awh_0').boundingBox();assert(box.height>=60);assert(box.width>=350);assert.equal(await page.locator('#awh_0').getAttribute('aria-expanded'),'false');
+await page.locator('#awh_0').tap({position:{x:box.width-8,y:box.height/2}});assert.equal(await page.locator('#awh_0').getAttribute('aria-expanded'),'true');await page.waitForTimeout(300);
+await page.screenshot({path:path.join(path.resolve(__dirname,'../build'),'workcalendar-mobile-awards-verified.png'),fullPage:true});
+await page.locator('#awh_0').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#awh_0').getAttribute('aria-expanded'),'false');
+await page.evaluate(()=>setAllAwardGroups(true));assert.equal(await page.locator('#awh_0').getAttribute('aria-expanded'),'true');
+await page.evaluate(()=>{go('comps');go('awards');go('comps');go('awards')});assert.equal(await page.locator('.view:not(.hidden)').count(),1);assert(await page.evaluate(()=>document.getElementById('view-awards').getAnimations().length)>0);await page.waitForTimeout(500);assert.equal(await page.evaluate(()=>document.getAnimations().length),0);
+await page.evaluate(()=>viewAwardDetail('test1'));await page.waitForTimeout(30);assert(await page.evaluate(()=>document.querySelector('#awardDetailBody h2').getAnimations().length)>0);await page.evaluate(()=>closeAwardDetail());await page.waitForTimeout(350);assert.equal(await page.evaluate(()=>document.getAnimations().length),0);
+await page.emulateMedia({reducedMotion:'reduce'});await page.evaluate(()=>{go('comps');go('awards')});assert.equal(await page.evaluate(()=>document.getAnimations().length),0);
+await page.setViewportSize({width:320,height:700});await page.evaluate(()=>{document.documentElement.classList.add('dark');go('awards')});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(path.resolve(__dirname,'../build'),'workcalendar-mobile-awards-dark-320.png'),fullPage:true});assert.deepEqual(errors,[]);
+console.log('PASS full-row edge tap, >=60px target, keyboard, expand-all state, rapid tabs, animation cleanup, detail reveal, reduced motion, 320px dark layout, no page errors');
+}finally{await browser?.close();server.close()}})().catch(e=>{console.error(e);process.exitCode=1});

@@ -55,6 +55,7 @@
   #wcImageViewer .wciv-hint { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0;
     text-align: center; color: rgba(255,255,255,.55); font-size: 11px; z-index: 2; pointer-events: none; }
 </style>
+<link rel="stylesheet" href="assets/mobile_motion.css">
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100" style="height:100dvh; display:flex; flex-direction:column; overflow:hidden;">
 
@@ -497,11 +498,11 @@ function renderAwards() {
     const lvlSum = items.reduce((m, x) => { if (x.level) m[x.level] = (m[x.level] || 0) + 1; return m; }, {});
     const lvlText = Object.keys(lvlSum).map(k => k + '×' + lvlSum[k]).join(' · ');
     const latest = items.map(x => x.award_date || '').filter(Boolean).sort().pop();
-    html += `<div class="flex items-center gap-1.5 px-1.5 pt-3 pb-1.5 cursor-pointer select-none active:opacity-70" onclick="toggleAwardGroup(${gi})" title="${open ? '折叠' : '展开'}该比赛的获奖">
-      <span id="awc_${gi}" class="text-slate-400 text-[9px] transition-transform ${open ? 'rotate-90' : ''}">▶</span>
-      <span class="muted font-medium truncate">🏁 ${esc(key)}</span>
-      <span class="muted text-[10px] ml-auto shrink-0">${items.length} 条${fc ? ' · 一作 ' + fc : ''}${lvlText ? ' · ' + esc(lvlText) : ''}${latest ? ' · ' + fmtDate(latest) : ''}</span>
-    </div>
+    html += `<button type="button" id="awh_${gi}" class="award-group-toggle" onclick="toggleAwardGroup(${gi})" aria-expanded="${open}" aria-controls="awg_${gi}">
+      <span id="awc_${gi}" class="award-group-chevron ${open ? 'rotate-90' : ''}" aria-hidden="true">▶</span>
+      <span class="award-group-label"><span class="award-group-name">🏁 ${esc(key)}</span>
+      <span class="muted award-group-meta">${items.length} 条${fc ? ' · 一作 ' + fc : ''}${lvlText ? ' · ' + esc(lvlText) : ''}${latest ? ' · ' + fmtDate(latest) : ''}</span></span>
+    </button>
     <div id="awg_${gi}" class="space-y-2.5" ${open ? '' : 'style="display:none"'}>` + items.map(a => `
       <div class="card p-3.5 active:scale-[0.99] transition-transform" onclick="viewAwardDetail('${a.id}')">
         <div class="flex items-start gap-2.5">
@@ -536,6 +537,7 @@ function toggleAwardGroup(gi) {
   const nowOpen = !!(list && list.style.display !== 'none');
   if (list) list.style.display = nowOpen ? 'none' : '';
   if (chev) chev.classList.toggle('rotate-90', !nowOpen);
+  $('awh_' + gi)?.setAttribute('aria-expanded', String(!nowOpen));
   const saved = awardGroupSaved();
   saved[key] = !nowOpen;
   try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
@@ -548,6 +550,7 @@ function setAllAwardGroups(open) {
     const list = $('awg_' + gi), chev = $('awc_' + gi);
     if (list) list.style.display = open ? '' : 'none';
     if (chev) chev.classList.toggle('rotate-90', open);
+    $('awh_' + gi)?.setAttribute('aria-expanded', String(open));
   });
   try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
 }
@@ -1251,5 +1254,6 @@ function wcViewImage(src) {
 })().catch(e => { console.error(e); window.alert('启动未完成：' + (e.message || e) + '\n请保留数据目录，勿卸载或清空数据。'); });
 
 </script>
+<script src="assets/mobile_motion.js"></script>
 </body>
 </html>

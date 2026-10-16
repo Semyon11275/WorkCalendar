@@ -41,6 +41,6 @@ jobs:
             echo 'Release already exists; leaving published artifacts unchanged.'
             exit 0
           fi
-          gh release create v0.5.0 --target "$GITHUB_SHA" --title '宸ヤ綔鏃ュ巻 v0.5.0' --notes-file RELEASE_NOTES.md --draft
+          gh release create v0.5.0 --target "$GITHUB_SHA" --title '工作日历 v0.5.0' --notes-file RELEASE_NOTES.md --draft
           gh release upload v0.5.0 release-assets/WorkCalendar-Windows-x64-v0.5.0.zip release-assets/WorkCalendar-Android-v0.5.0.apk release-assets/WorkCalendar-Source-v0.5.0.zip release-assets/SHA256SUMS.txt release-assets/RELEASE_MANIFEST.json ACCEPTANCE.md
           gh release edit v0.5.0 --draft=false --latest

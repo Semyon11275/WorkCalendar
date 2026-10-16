@@ -49,3 +49,8 @@
 ## 2026-10-17 发布收尾
 
 Windows 公开包随附项目 LICENSE、THIRD_PARTY_NOTICES.md、完整 LICENSES/ 和说明文档。CI 同时运行手机数据恢复、附件同步契约、3MiB 编码与跨批次并发回归测试。源码包由提交快照生成，排除 release-assets，SHA256SUMS.txt 与 RELEASE_MANIFEST.json 记录最终公开产物。Android 实机扫码与完整同步仍待验收。
+
+
+## Android 修订版验收（versionCode 26）
+
+手机尺寸浏览器通过：整行边缘点按、最小 60px 触控区域、键盘激活、全部展开状态、快速连续切换、动画清理、详情展开、减少动效、320px 深色布局，无页面脚本错误。使用隔离模拟数据；尚未进行 Android 真机安装和扫码同步验收。APK 沿用原正式签名，versionName 0.5.0、versionCode 26。

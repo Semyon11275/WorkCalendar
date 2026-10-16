@@ -1,0 +1,11 @@
+/* Mobile touch targets and motion; independent of desktop drawer markup. */
+.award-group-toggle{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;margin:10px 0 8px;padding:12px 14px;text-align:left;border:1px solid rgba(100,116,139,.2);border-radius:14px;background:rgba(148,163,184,.09);color:inherit;touch-action:manipulation;cursor:pointer;}
+.award-group-toggle:active{background:rgba(99,102,241,.14)}
+.award-group-toggle:focus-visible{outline:2px solid #6366f1;outline-offset:2px}
+.award-group-chevron{font-size:14px;flex:none;transition:transform .22s ease;}
+.award-group-label{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+.award-group-name{font-size:14px;font-weight:600;line-height:1.45;overflow-wrap:anywhere;}
+.award-group-meta{font-size:11px;line-height:1.5;overflow-wrap:anywhere;}
+@media(prefers-reduced-motion:reduce){.award-group-chevron{transition:none}}
+body.motion-reduced .award-group-chevron{transition:none}
+body.motion-reduced .page-in{animation:none!important}
