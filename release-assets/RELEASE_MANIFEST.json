@@ -1,7 +1,7 @@
 {
   "version": "0.5.0",
   "author": "Varsha32",
-  "source_commit": "ffce5c64f22d14ebb92286f1c87119200d5c1a0e",
+  "source_commit": "dcafdb8d90403014a7798591333b429cd943e147",
   "artifacts": [
     {
       "file": "WorkCalendar-Windows-x64-v0.5.0.zip",
@@ -10,13 +10,15 @@
     },
     {
       "file": "WorkCalendar-Android-v0.5.0.apk",
-      "bytes": 14931322,
-      "sha256": "99c4a3d49c56b246953ad845236738f7111396c146a00b5c1e5b49c13f7cc87f"
+      "bytes": 14934018,
+      "sha256": "1080cbb78c931f42a81a60ebac645551e342eb53b415390cd53b702f185c3507"
     },
     {
       "file": "WorkCalendar-Source-v0.5.0.zip",
-      "bytes": 22123389,
-      "sha256": "c362a96cca638b85904c853c640f6dd305efee9684ecf4ad4ef97d7dd504e18e"
+      "bytes": 22128048,
+      "sha256": "45c6dd342f057296692f2dbe998e3ab2039139e1820a3c8a5a2a5714a0335125"
     }
-  ]
+  ],
+  "android_version_code": 26,
+  "windows_source_commit": "ffce5c64f22d14ebb92286f1c87119200d5c1a0e"
 }
