@@ -1,0 +1,192 @@
+/* ==================================================================
+   WorkCalendar · wenku8 风格主题（仿 wenku8x / hikari_novel_flutter 设计语言）
+   来源提取：wenku8-0.2.4 APK（Flutter + Material 3）
+   - 字体：思源宋体 SourceHanSerifCN Regular/Bold（自 APK 提取，OFL 许可）
+   - 配色：Material 3 蓝色种子色调分层（品牌默认色），以色调表面替代重阴影
+   - 形状：胶囊（按钮/导航/徽章）+ 大圆角卡片（20px）
+   - 深浅双主题跟随应用原有的 html.dark 开关
+   回退方法：删除 index.html 中的本文件 <link> 一行即可完全还原。
+   ================================================================== */
+
+@font-face {
+  font-family: 'SourceHanSerifCN';
+  src: url('/assets/SourceHanSerifCN-Regular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'SourceHanSerifCN';
+  src: url('/assets/SourceHanSerifCN-Bold.otf') format('opentype');
+  font-weight: 600 800; font-style: normal; font-display: swap;
+}
+
+/* ---------- 字体：全局书卷衬线 ---------- */
+body, .card, .btn, .nav-item, .badge, .input, .muted,
+h1, h2, h3, h4, h5, label, th, td, select, textarea {
+  font-family: 'SourceHanSerifCN', 'Noto Serif SC', '思源宋体', 'SimSun', serif !important;
+}
+/* 数字与代码保持无衬线/等宽，保证对齐不跳动 */
+.stat-num, .countdown, .tabular, code, .font-mono, pre {
+  font-family: 'Segoe UI', 'Microsoft YaHei', ui-sans-serif, sans-serif !important;
+}
+.font-mono, code, pre { font-family: ui-monospace, Consolas, monospace !important; }
+
+/* ---------- 表面：M3 色调分层（浅色） ---------- */
+body { background: #F9F9FF !important; }
+header {
+  background: rgba(249, 250, 253, 0.94) !important;
+  border-color: #DFE3EC !important;
+}
+nav {
+  background: #F1F3FA !important;
+  border-color: #DFE3EC !important;
+}
+.nav-label { color: #8A8F9E !important; font-weight: 700 !important; letter-spacing: .18em !important; }
+
+/* ---------- 表面：M3 色调分层（深色） ---------- */
+html.dark body { background: #101318 !important; }
+html.dark header {
+  background: rgba(22, 25, 30, 0.94) !important;
+  border-color: #2A2E36 !important;
+}
+html.dark nav { background: #16191F !important; border-color: #2A2E36 !important; }
+html.dark .nav-label { color: #6B7079 !important; }
+
+/* ---------- 品牌区：logo 与标题去渐变，实色 M3 主色 ---------- */
+header .w-9.h-9.bg-gradient-to-br {
+  background: #0B57D0 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+}
+header .bg-clip-text {
+  background: none !important;
+  color: #0B57D0 !important;
+  -webkit-text-fill-color: #0B57D0 !important;
+  letter-spacing: .02em;
+}
+html.dark header .bg-clip-text { color: #A8C7FA !important; -webkit-text-fill-color: #A8C7FA !important; }
+
+/* ---------- 导航：M3 NavigationRail 胶囊选中态 ---------- */
+.nav-item {
+  border-radius: 999px !important;
+  color: #44474E !important;
+  font-weight: 400 !important;
+  transition: background-color .18s ease, color .18s ease !important;
+}
+.nav-item:hover {
+  background: #E4E9F5 !important;
+  color: #1B1F27 !important;
+}
+.nav-item.active {
+  background: #D3E3FD !important;
+  background-image: none !important;
+  color: #041E49 !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+html.dark .nav-item { color: #C3C6CF !important; }
+html.dark .nav-item:hover { background: #2A2E36 !important; color: #EDEEF4 !important; }
+html.dark .nav-item.active {
+  background: #1E3A66 !important;
+  color: #D3E3FD !important;
+}
+
+/* ---------- 卡片：大圆角 + 发丝描边 + 轻投影（M3 tonal） ---------- */
+.card {
+  background: #FFFFFF !important;
+  border-color: #E6E8EF !important;
+  border-radius: 20px !important;
+  box-shadow: 0 1px 2px rgba(11, 34, 73, 0.05) !important;
+}
+.card-hover:hover {
+  box-shadow: 0 6px 20px rgba(11, 87, 208, 0.10) !important;
+  transform: none !important;
+}
+html.dark .card {
+  background: #1B1E24 !important;
+  border-color: #2E323A !important;
+  box-shadow: none !important;
+}
+
+/* ---------- 按钮：胶囊 + M3 填充色 ---------- */
+.btn { border-radius: 999px !important; font-weight: 600 !important; box-shadow: none !important; }
+.btn-primary {
+  background: #0B57D0 !important;
+  box-shadow: none !important;
+}
+.btn-primary:hover { background: #0A4CBB !important; filter: none !important; }
+.btn-ghost {
+  background: #EDF0F7 !important;
+  color: #3A3F4B !important;
+}
+.btn-ghost:hover { background: #E2E7F1 !important; }
+.btn-danger { background: #F9DEDE !important; color: #B3261E !important; }
+.btn-danger:hover { background: #F3CFCE !important; }
+html.dark .btn-primary { background: #A8C7FA !important; color: #062E5F !important; }
+html.dark .btn-primary:hover { background: #BBD5FB !important; }
+html.dark .btn-ghost { background: #2A2E36 !important; color: #D5D7DE !important; }
+html.dark .btn-ghost:hover { background: #343943 !important; }
+html.dark .btn-danger { background: #4A2C2A !important; color: #F2B8B5 !important; }
+
+/* ---------- 输入与徽章 ---------- */
+.input {
+  border-radius: 12px !important;
+  border-color: #C9CEDA !important;
+  background: #FFFFFF !important;
+}
+.input:focus { box-shadow: 0 0 0 2px rgba(11, 87, 208, 0.22) !important; }
+html.dark .input { background: #1B1E24 !important; border-color: #3A3F49 !important; }
+.badge { border-radius: 999px !important; }
+
+/* ---------- 视图标题：渐变竖条 → M3 主色实条 ---------- */
+h3 .bg-gradient-to-b, h4 .bg-gradient-to-b {
+  background: #0B57D0 !important;
+  background-image: none !important;
+}
+html.dark h3 .bg-gradient-to-b, html.dark h4 .bg-gradient-to-b { background: #A8C7FA !important; }
+
+/* ---------- 统计卡图标块：多彩渐变 → 同色系 M3 柔和色调（圆形，保色相编码） ---------- */
+.w-11.h-11.bg-gradient-to-br {
+  background-image: none !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+.w-11.h-11.from-indigo-500   { background-color: #E5E7FC !important; } .w-11.h-11.from-indigo-500 svg   { color: #4338CA !important; }
+.w-11.h-11.from-violet-500   { background-color: #F0E5FB !important; } .w-11.h-11.from-violet-500 svg   { color: #7E22CE !important; }
+.w-11.h-11.from-amber-500    { background-color: #FDEFD9 !important; } .w-11.h-11.from-amber-500 svg    { color: #B45309 !important; }
+.w-11.h-11.from-rose-500     { background-color: #FCE3E1 !important; } .w-11.h-11.from-rose-500 svg     { color: #BE123C !important; }
+.w-11.h-11.from-emerald-500  { background-color: #DCF3EA !important; } .w-11.h-11.from-emerald-500 svg  { color: #047857 !important; }
+.w-11.h-11.from-slate-500    { background-color: #EBEEF3 !important; } .w-11.h-11.from-slate-500 svg    { color: #475569 !important; }
+html.dark .w-11.h-11.from-indigo-500  { background-color: #2E2F52 !important; } html.dark .w-11.h-11.from-indigo-500 svg  { color: #C7CCF9 !important; }
+html.dark .w-11.h-11.from-violet-500  { background-color: #3A2450 !important; } html.dark .w-11.h-11.from-violet-500 svg  { color: #D8B4FE !important; }
+html.dark .w-11.h-11.from-amber-500   { background-color: #4A3315 !important; } html.dark .w-11.h-11.from-amber-500 svg   { color: #FBD38D !important; }
+html.dark .w-11.h-11.from-rose-500    { background-color: #4A2320 !important; } html.dark .w-11.h-11.from-rose-500 svg    { color: #FCA5A5 !important; }
+html.dark .w-11.h-11.from-emerald-500 { background-color: #173B31 !important; } html.dark .w-11.h-11.from-emerald-500 svg { color: #6EE7B7 !important; }
+html.dark .w-11.h-11.from-slate-500   { background-color: #2A2E36 !important; } html.dark .w-11.h-11.from-slate-500 svg   { color: #B6BCC8 !important; }
+
+/* ---------- 抽屉 / 模态：M3 表面 ---------- */
+#drawerPanel { background: #F9F9FF !important; }
+html.dark #drawerPanel { background: #14171C !important; }
+#drawerPanel > div:first-child {
+  background: #0B57D0 !important;
+  background-image: none !important;
+}
+html.dark #drawerPanel > div:first-child { background: #1E3A66 !important; }
+.modal-in { background: #FFFFFF !important; }
+html.dark .modal-in { background: #1B1E24 !important; }
+
+/* ---------- 细节：表格 / 滚动条 / 选区 / 焦点 ---------- */
+th { color: #6B7079 !important; letter-spacing: .06em; }
+html.dark th { color: #9BA0AA !important; }
+::selection { background: rgba(11, 87, 208, 0.16); }
+html.dark ::selection { background: rgba(168, 199, 250, 0.24); }
+::-webkit-scrollbar-thumb { background: #C7CEDC !important; border-radius: 999px !important; }
+html.dark ::-webkit-scrollbar-thumb { background: #3A3F49 !important; }
+button:focus-visible, .nav-item:focus-visible { outline-color: rgba(11, 87, 208, 0.55) !important; }
+
+/* 端口信息小卡 */
+#portInfo { background: #EDF0F7 !important; border-radius: 14px !important; }
+html.dark #portInfo { background: #1B1E24 !important; }
+
+/* Toast 胶囊化 */
+#toast > div { border-radius: 999px !important; }
