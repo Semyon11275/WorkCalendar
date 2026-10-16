@@ -88,6 +88,11 @@
     });
   }
 
+  /* 待生成数量（done/inflight 之外的图片凭证）——设置页按钮用于判断是否已全部就绪 */
+  function pending(fnames) {
+    return (fnames || []).filter(function (f) { return IMG_RE.test(f) && !done.has(f) && !inflight.has(f); }).length;
+  }
+
   window.__wcCertPreview = true;
-  window.wcCertPreview = { previewName: previewName, generateFromFile: generateFromFile, ensure: ensure, ensureAll: ensureAll };
+  window.wcCertPreview = { previewName: previewName, generateFromFile: generateFromFile, ensure: ensure, ensureAll: ensureAll, pending: pending };
 })();

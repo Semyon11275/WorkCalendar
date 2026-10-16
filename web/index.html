@@ -904,6 +904,12 @@ function renderAwards() {
     html += `</tbody></table></div>`;
   }
   $('view-awards').innerHTML = html;
+  /* 首次进入获奖页：后台自动补齐全部预览图（每会话一次，电脑展示不受影响） */
+  if (!window.__wcPreviewSwept && window.wcCertPreview && !IS_LOCAL && S_AWARDS.list.length) {
+    window.__wcPreviewSwept = true;
+    const certs = [...new Set(S_AWARDS.list.flatMap(a => a.certificate_files || []))];
+    if (wcCertPreview.pending(certs)) wcCertPreview.ensureAll(certs);
+  }
   const sb = $('awardSearch'); if (sb) {
     sb.oninput = debounce(() => { S_AWARDS.filter.keyword = sb.value; refreshAwards().then(renderAwards); }, 300);
   }
@@ -1145,6 +1151,15 @@ function renderImportHistory(targetId) {
 }
 
 /* ---------- 设置 ---------- */
+/* 一键为全部图片凭证生成手机同步预览图（设置页按钮；电脑展示仍用原件） */
+async function generateAllPreviews() {
+  if (!window.wcCertPreview) return toast('当前版本不支持预览生成', 'warn');
+  if (!S_AWARDS.list.length) { try { await refreshAwards(); } catch (e) {} }
+  const certs = [...new Set(S_AWARDS.list.flatMap(a => a.certificate_files || []))];
+  if (!wcCertPreview.pending(certs)) return toast('预览图已全部就绪，无需处理 ✅');
+  toast('开始生成手机同步预览图…');
+  wcCertPreview.ensureAll(certs);
+}
 function renderSettings() {
   $('view-settings').innerHTML = `
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2 anim-in"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>设置</h3>
@@ -1157,6 +1172,7 @@ function renderSettings() {
           <button class="btn btn-ghost" onclick="openExportFolder()">📂 打开导出文件夹</button>
           <button class="btn btn-ghost" onclick="openLogsFolder()">🧾 打开日志文件夹</button>
           <button class="btn btn-ghost" onclick="exportLogsZip()">🧾 导出日志文件（反馈问题用）</button>
+          <button class="btn btn-ghost" onclick="generateAllPreviews()" title="为所有图片凭证生成 ~200KB 压缩预览，手机同步更省流量；电脑展示仍用原件">📱 生成手机同步预览图</button>
         </div>
         <div class="muted">导出为 zip 备份包，保存在程序目录 data\exports\ 下</div>
         <div class="muted" id="backupInfo"></div>
