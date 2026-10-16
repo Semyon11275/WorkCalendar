@@ -44,3 +44,8 @@
 4. 私钥与密码仍保存在 PRIVATE_DO_NOT_UPLOAD，不入库。
 
 源码包含 README 构建步骤与 BUILD_ENVIRONMENT.txt 环境记录；Android 发布签名经 gradle 属性注入，不进入构建源码。
+
+
+## 2026-10-17 发布收尾
+
+Windows 公开包随附项目 LICENSE、THIRD_PARTY_NOTICES.md、完整 LICENSES/ 和说明文档。CI 同时运行手机数据恢复、附件同步契约、3MiB 编码与跨批次并发回归测试。源码包由提交快照生成，排除 release-assets，SHA256SUMS.txt 与 RELEASE_MANIFEST.json 记录最终公开产物。Android 实机扫码与完整同步仍待验收。

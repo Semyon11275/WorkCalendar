@@ -1,4 +1,4 @@
-# 工作日历 WorkCalendar 0.4.2
+# 工作日历 WorkCalendar 0.5.0
 
 面向设计学生参加相关比赛的本地日程与获奖管理工具，当前仍然是测试版，各位在使用时遇到问题麻烦手动提交错误日志（出于隐私和信任度考虑，除了ai助手功能，此软件基本离线运行，并不能自动提交），目前作者的开发进度基本取决于作者可用的套餐额度，因此改进速度可能较慢∠( ᐛ 」∠)_
 
@@ -10,14 +10,18 @@
 
 从 [GitHub Releases](https://github.com/Semyon11275/WorkCalendar/releases/latest) 下载 Windows 压缩包或 Android APK；源码压缩包供开发者使用。下载后可按 SHA256SUMS.txt 校验。
 
+## 0.5.0 更新
+
+新增获奖分组折叠、过期比赛默认隐藏、桌面主题与复制菜单，以及手机证书同步和图片查看。修复中文附件打开、大图片上传与预览并发问题。Android 实机扫码、完整同步链路仍待验证，测试范围见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+
 ## 使用
 
 - Windows：解压公开 Windows 包，运行 `WorkCalendar.exe`。需要 Windows 10/11 x64 和 Microsoft Edge WebView2 Runtime。程序首次运行在自身目录创建 `data/` 和 `webview_data/`，因此请放在可写目录。
 - Android：安装正式签名 APK。程序数据存于应用私有目录，卸载会删除。0.4.1 若为 debug 签名，与正式签名不兼容；先从旧版导出并验证备份，再卸载旧版安装，不能直接覆盖安装。
 - 升级 Windows：关闭旧程序，保存旧目录的完整副本，将 `data/` 和 `webview_data/` 复制到新版程序目录；不要将这些目录上传 GitHub。
-- 配对：两端连接同一可信局域网，在电脑设置中显示配对码，手机扫码，电脑核对请求 IP 和配对码后允许。手机只获得比赛/获奖数据同步权限，不能配置或调用电脑的 AI。电脑重启后需要重新配对。
-- 同步传输使用 HTTP，仅用于可信局域网；不要开放到公网。同步内容不包括证书文件、AI Key 和聊天历史。导入覆盖操作前先备份。
-- API Token 自动生成，缺失/错误凭据不可访问数据。证书通过已授权电脑会话读取。Token 保存失败会停止启动。
+- 配对：两端连接同一可信局域网，在电脑设置中显示配对码，手机扫码，电脑核对请求 IP 和配对码后允许。手机只获得比赛、获奖数据及记录引用附件的同步权限，不能配置或调用电脑的 AI。电脑重启后需要重新配对。
+- 同步传输使用 HTTP，仅用于可信局域网；不要开放到公网。两端均升级至 0.5.0 后，手机拉取会下载获奖记录引用的证书，图片优先下载独立预览（不覆盖已有原件），单个附件上限 16MB。AI Key 和聊天历史不参与同步。导入覆盖操作前先备份。
+- API Token 自动生成，缺失/错误凭据不可访问数据。证书通过已授权电脑会话读取；PDF/HTML 外部浏览器打开使用 60 秒一次性票据。Token 保存失败会停止启动。
 
 ## AI 与隐私
 
@@ -37,6 +41,8 @@ python -m venv .venv
 pip install pywebview==6.2.1 pyinstaller==6.21.0
 python -m unittest discover -s tests -t .
 node tests/test_mobile.cjs
+node tests/test_sync_frontend.cjs
+node tests/test_release_frontend.cjs
 python -m app.main
 ```
 
@@ -46,7 +52,7 @@ Windows 打包（在项目根运行）：
 python -m PyInstaller --noconfirm build.spec
 ```
 
-环境变量 `PYTHONPATH` 应为空；输出为 `dist/WorkCalendar/`。不要直接打包正在使用的程序目录。
+环境变量 `PYTHONPATH` 应为空；输出为 `dist/WorkCalendar/`。公开 ZIP 还须带上 LICENSE、THIRD_PARTY_NOTICES.md、LICENSES/ 与使用说明。不要直接打包正在使用的程序目录。
 
 Android 构建需要 JDK 21、Android SDK 34、Node.js 22+：
 
