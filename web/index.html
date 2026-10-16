@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/assets/theme_wenku8.css">
 <script src="/assets/copy_menu.js"></script>
 <script src="/assets/motion_pack.js"></script>
+<script src="/assets/cert_preview.js"></script>
 <style type="text/tailwindcss">
   body { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif; }
 
@@ -991,6 +992,8 @@ async function renderCertsInto(el, certs) {
     el.innerHTML = certs.map(f => /\.(jpe?g|png|webp|gif)$/i.test(f)
       ? `<div class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600"><img src="/certificates/${encodeURIComponent(f)}" class="w-full h-auto cursor-pointer" onclick="window.open('/certificates/${encodeURIComponent(f)}','_blank')" title="点击放大"></div>`
       : `<a class="btn btn-ghost !py-1.5 !px-3 text-xs" href="/certificates/${encodeURIComponent(f)}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`).join('');
+    /* 后台为图片凭证补生成压缩预览图（手机同步用），完成后统一提示 */
+    if (window.wcCertPreview) wcCertPreview.ensureAll(certs);
     return;
   }
   el.innerHTML = '<span class="muted text-xs">加载凭证…</span>';
@@ -1014,6 +1017,8 @@ async function uploadCert(input) {
     AWARD_CERTS.push(r.filename);
     renderCertList();
     toast('凭证已上传：' + r.filename);
+    /* 顺手生成手机同步用的压缩预览图（不阻塞界面） */
+    if (window.wcCertPreview) wcCertPreview.generateFromFile(r.filename, f);
   } catch (e) { toast('上传失败：' + e.message, 'err'); }
   input.value = '';
 }

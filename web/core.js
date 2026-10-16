@@ -644,7 +644,9 @@ async function syncPull() {
   } catch (e) { toast('拉取失败：' + e.message, 'err'); if ($('syncResult')) $('syncResult').textContent = '拉取失败：' + e.message; }
   finally { if (btn) { btn.disabled = false; btn.textContent = '📥 从电脑拉取'; } }
 }
-/* 逐个下载电脑端 data/certificates/ 里被获奖记录引用、本地缺失的凭证文件 */
+/* 逐个下载电脑端 data/certificates/ 里被获奖记录引用、本地缺失的凭证文件。
+   图片凭证优先取电脑端生成的压缩预览图（<原名>_preview.jpg，~200KB），
+   以原名落盘——查看与体积都与原件体验一致，传输量大幅下降（2026-10-17）。 */
 async function syncCertificates(base, awards) {
   if (!IS_LOCAL || !window.Capacitor?.Plugins?.Filesystem) return;
   const fs = window.Capacitor.Plugins.Filesystem;
@@ -652,12 +654,22 @@ async function syncCertificates(base, awards) {
   if (!names.length) return;
   await LOC.init();
   let done = 0, fetched = 0;
+  const token = syncToken();
+  const headers = token ? { 'X-Sync-Token': token } : {};
   for (const name of names) {
     try {
-      try { await fs.stat({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA }); continue; } catch (e) { /* 本地无 → 下载 */ }
-      const token = syncToken();
-      const res = await fetch(base + '/certificates/' + encodeURIComponent(name), {
-        headers: token ? { 'X-Sync-Token': token } : {}, credentials: 'omit' });
+      let res = null, isPreview = false;
+      if (/\.(jpe?g|png|webp|gif)$/i.test(name)) {
+        /* 直接拉预览：命中即用（200 时响应体就是预览数据，无额外探测开销） */
+        const pv = name.replace(/(\.[^.]+)$/, '_preview.jpg');
+        res = await fetch(base + '/certificates/' + encodeURIComponent(pv), { headers, credentials: 'omit' });
+        if (res.ok) isPreview = true;
+      }
+      if (!res || !res.ok) {
+        /* 无预览：本地已有原件则跳过 */
+        try { await fs.stat({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA }); done++; continue; } catch (e) { /* 本地无 → 下载原件 */ }
+        res = await fetch(base + '/certificates/' + encodeURIComponent(name), { headers, credentials: 'omit' });
+      }
       if (!res.ok) continue;
       const buf = new Uint8Array(await res.arrayBuffer());
       let bin = '';
@@ -665,11 +677,10 @@ async function syncCertificates(base, awards) {
       await fs.writeFile({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA,
         data: btoa(bin), recursive: true });
       fetched++;
+      void isPreview;
     } catch (e) { /* 单个失败跳过，不阻断整体 */ }
     done++;
-    if (done % 5 === 0 || done === names.length) {
-      if (done === names.length && fetched > 0) toast(`凭证已同步 ${fetched}/${names.length} 个，点开即可查看`);
-    }
+    if (done === names.length && fetched > 0) toast(`凭证已同步 ${fetched}/${names.length} 个，点开即可查看`);
   }
 }
 async function syncPush() {
