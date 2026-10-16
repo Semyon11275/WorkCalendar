@@ -30,6 +30,7 @@
   (document.head || document.documentElement).appendChild(st);
 
   /* ---------- 1. 视图切换：斜向揭示 ---------- */
+  var activeAnims = [], activeSnapshot = null, activeTarget = null;
   function installViewTransition() {
     if (typeof window.go !== 'function' || window.go.__wcWrapped) return;
     var original = window.go;
@@ -43,6 +44,14 @@
       if (!host || !target || !prev || prev === target || prev.id === target.id) return;
       if (reduced() || !target.animate) return;
       var direction = navOrder.indexOf(view) > navOrder.indexOf(prev.id.replace('view-', '')) ? 1 : -1;
+
+      /* 中断处理（原包 dock-motion：新切换前取消进行中的动画并移除旧快照）——
+         快速连点不堆叠动画，一次点击只播一次切换；也避免旧清理回调误删新视图层级 */
+      activeAnims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
+      activeAnims = [];
+      if (activeSnapshot) { activeSnapshot.remove(); activeSnapshot = null; }
+      if (activeTarget && activeTarget !== target) { activeTarget.classList.remove('wc-view-incoming'); }
+      activeTarget = target;
 
       /* 旧页快照：放在 mainArea 内（同一层叠上下文），避免盖住侧栏 */
       var rect = prev.getBoundingClientRect(), hostRect = host.getBoundingClientRect();
@@ -58,6 +67,7 @@
         height: Math.min(rect.height, host.clientHeight) + 'px'
       });
       host.appendChild(snapshot);
+      activeSnapshot = snapshot;
 
       /* 新页：去掉默认 fadeUp，改用斜边揭示（原包 dock-motion 参数） */
       target.classList.remove('anim-in');
@@ -76,9 +86,14 @@
       var outgoing = snapshot.animate(
         [{ transform: 'none' }, { transform: 'translate(' + (10 * direction) + 'px,-4px)' }],
         { duration: 420, easing: 'cubic-bezier(.18,.72,.18,1)' });
+      activeAnims = [incoming, outgoing];
       incoming.finished.catch(function () {}).then(function () {
         snapshot.remove();
-        target.classList.remove('wc-view-incoming');
+        /* 只有仍是当前动画时才摘层级，被中断的新一轮切换不受影响 */
+        if (activeAnims[0] === incoming) {
+          target.classList.remove('wc-view-incoming');
+          activeTarget = null;
+        }
       });
       outgoing.finished.catch(function () {});
     };
