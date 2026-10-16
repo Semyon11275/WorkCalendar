@@ -639,8 +639,38 @@ async function syncPull() {
     toast('已从电脑拉取 ✅ ' + fmtSyncReport(r.data.report, true));
     await refresh(); refreshAwards().then(renderAwards);
     if ($('syncResult')) $('syncResult').textContent = '上次拉取：' + new Date().toLocaleTimeString() + '　' + fmtSyncReport(r.data.report, true);
+    /* 顺带把电脑上的获奖凭证文件拉到本地（此前只同步 JSON，手机上看不了图）（2026-10-16） */
+    syncCertificates(base, d.awards).catch(() => {});
   } catch (e) { toast('拉取失败：' + e.message, 'err'); if ($('syncResult')) $('syncResult').textContent = '拉取失败：' + e.message; }
   finally { if (btn) { btn.disabled = false; btn.textContent = '📥 从电脑拉取'; } }
+}
+/* 逐个下载电脑端 data/certificates/ 里被获奖记录引用、本地缺失的凭证文件 */
+async function syncCertificates(base, awards) {
+  if (!IS_LOCAL || !window.Capacitor?.Plugins?.Filesystem) return;
+  const fs = window.Capacitor.Plugins.Filesystem;
+  const names = [...new Set((awards || []).flatMap(a => a.certificate_files || []))];
+  if (!names.length) return;
+  await LOC.init();
+  let done = 0, fetched = 0;
+  for (const name of names) {
+    try {
+      try { await fs.stat({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA }); continue; } catch (e) { /* 本地无 → 下载 */ }
+      const token = syncToken();
+      const res = await fetch(base + '/certificates/' + encodeURIComponent(name), {
+        headers: token ? { 'X-Sync-Token': token } : {}, credentials: 'omit' });
+      if (!res.ok) continue;
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
+      await fs.writeFile({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA,
+        data: btoa(bin), recursive: true });
+      fetched++;
+    } catch (e) { /* 单个失败跳过，不阻断整体 */ }
+    done++;
+    if (done % 5 === 0 || done === names.length) {
+      if (done === names.length && fetched > 0) toast(`凭证已同步 ${fetched}/${names.length} 个，点开即可查看`);
+    }
+  }
 }
 async function syncPush() {
   const base = syncAddr();

@@ -26,6 +26,8 @@ webview_data/
 node_modules/
 .gradle/
 local.properties
+# Android：由 scripts/sync_web.py 从 web/ 生成，不入库
+android-app/www/
 *.jks
 *.keystore
 *.p12

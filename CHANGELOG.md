@@ -1,5 +1,11 @@
 # 0.4.3（开发中）
 
+- Android 0.4.3（versionCode 19）：
+  - 修复手机看不了凭证图片：同步只传 JSON 不传证书文件的根因，拉取后自动逐个下载
+    电脑端凭证到本地；新增全屏图片查看器（双指缩放 / 双击放大 / 拖动），凭证与 AI 图片可点开
+  - 布局防御：禁止横向溢出滚动、长文/长 URL 换行、图片宽度收缩，缓解错位/过长/超出
+  - 应用 wenku8 主题（系统衬线回退，不含 23MB 字体文件，APK 体积不变）
+  - 启动提速：echarts/qrcode/jsqr 移出 head 不再阻塞首屏
 - 界面主题：仿 wenku8 客户端设计语言（Flutter + Material 3 + 思源宋体），
   新增 web/assets/theme_wenku8.css（回退 = 删除 index.html 中对应 link 一行）：
   - 思源宋体全局字体（自 APK 提取，OFL 许可随附；font-display:swap 不阻塞首屏）

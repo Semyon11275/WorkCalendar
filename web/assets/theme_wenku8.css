@@ -10,12 +10,12 @@
 
 @font-face {
   font-family: 'SourceHanSerifCN';
-  src: url('/assets/SourceHanSerifCN-Regular.otf') format('opentype');
+  src: url('SourceHanSerifCN-Regular.otf') format('opentype');
   font-weight: 400; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: 'SourceHanSerifCN';
-  src: url('/assets/SourceHanSerifCN-Bold.otf') format('opentype');
+  src: url('SourceHanSerifCN-Bold.otf') format('opentype');
   font-weight: 600 800; font-style: normal; font-display: swap;
 }
 
@@ -51,8 +51,18 @@ html.dark header {
 html.dark nav { background: #16191F !important; border-color: #2A2E36 !important; }
 html.dark .nav-label { color: #6B7079 !important; }
 
+/* ---------- 移动端底部标签栏（mobile.html）---------- */
+.tabbar-item.active { color: #0B57D0 !important; }
+html.dark .tabbar-item.active { color: #A8C7FA !important; }
+.chip-on {
+  background: #0B57D0 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+html.dark .chip-on { background: #A8C7FA !important; color: #062E5F !important; }
+
 /* ---------- 品牌区：logo 与标题去渐变，实色 M3 主色 ---------- */
-header .w-9.h-9.bg-gradient-to-br {
+header .w-9.h-9.bg-gradient-to-br, header .w-8.h-8.bg-gradient-to-br {
   background: #0B57D0 !important;
   background-image: none !important;
   box-shadow: none !important;

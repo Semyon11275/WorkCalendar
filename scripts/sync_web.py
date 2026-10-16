@@ -10,7 +10,8 @@ for name in ['core.js', 'ai_files.js', 'ai_mobile.js']:
     shutil.copy2(root / 'web' / name, target / name)
 shutil.copy2(root / 'web/mobile.html', target / 'index.html')
 shutil.copy2(root / 'web/mobile.html', target / 'mobile.html')
-shutil.copytree(root / 'web/assets', target / 'assets', dirs_exist_ok=True)
+shutil.copytree(root / 'web/assets', target / 'assets', dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns('SourceHanSerifCN-*'))
 shutil.copytree(root / 'LICENSES', target / 'licenses', dirs_exist_ok=True)
 for document in ['LICENSE', 'THIRD_PARTY_NOTICES.md']:
     shutil.copy2(root / document, target / 'licenses' / document)

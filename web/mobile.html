@@ -7,9 +7,7 @@
 <title>工作日历</title>
 <script src="assets/tailwind.min.js"></script>
 <script>tailwind.config = { darkMode: 'class' }</script>
-<script src="assets/echarts.min.js"></script>
-<script src="assets/qrcode.min.js"></script>
-<script src="assets/jsqr.min.js"></script>
+<link rel="stylesheet" href="assets/theme_wenku8.css">
 <style type="text/tailwindcss">
   body { font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif; }
   .card { @apply bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200/70 dark:border-slate-700/70 shadow-[0_1px_3px_rgba(15,23,42,0.04)]; }
@@ -39,6 +37,23 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
+  /* ---------- 布局防御：防横向溢出 / 长文换行 / 图片收缩（2026-10-16） ---------- */
+  html, body { overflow-x: hidden; max-width: 100vw; }
+  #mainArea, #detailBody, #formBody, #awardDetailPage, .card { overflow-wrap: break-word; min-width: 0; }
+  img { max-width: 100%; }
+  pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  /* ---------- 图片全屏查看器 ---------- */
+  #wcImageViewer { position: fixed; inset: 0; z-index: 2147483000; background: rgba(8, 10, 16, .96);
+    display: flex; align-items: center; justify-content: center; touch-action: none; }
+  #wcImageViewer img { position: absolute; max-width: 100%; max-height: 100%; will-change: transform;
+    transform-origin: 0 0; transition: transform .18s ease; }
+  #wcImageViewer img.wcDragging { transition: none; }
+  #wcImageViewer .wciv-close { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: 12px;
+    width: 38px; height: 38px; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 17px; z-index: 2; }
+  #wcImageViewer .wciv-hint { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: 0; right: 0;
+    text-align: center; color: rgba(255,255,255,.55); font-size: 11px; z-index: 2; pointer-events: none; }
 </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100" style="height:100dvh; display:flex; flex-direction:column; overflow:hidden;">
@@ -125,6 +140,9 @@
 
 <div id="toast" class="fixed left-3 right-3 z-[60] space-y-2" style="bottom:calc(80px + env(safe-area-inset-bottom,0px))"></div>
 
+<script src="assets/echarts.min.js"></script>
+<script src="assets/qrcode.min.js"></script>
+<script src="assets/jsqr.min.js"></script>
 <script src="./core.js"></script>
 <script src="./ai_files.js"></script>
 <script src="./assets/xlsx.full.min.js"></script>
@@ -602,7 +620,7 @@ async function renderCertsInto(el, certs) {
   for (const f of certs) {
     const url = await certUrl(f);
     if (!url) { parts.push(`<div class="muted text-xs">📄 ${esc(f)}（凭证在电脑上，同步后可见）</div>`); continue; }
-    if (/\.(jpe?g|png|webp|gif)$/i.test(f)) parts.push(`<img src="${url}" class="w-full rounded-xl border border-slate-200 dark:border-slate-600">`);
+    if (/\.(jpe?g|png|webp|gif)$/i.test(f)) parts.push(`<img src="${url}" class="w-full rounded-xl border border-slate-200 dark:border-slate-600 cursor-zoom-in" onclick="wcViewImage(this.src)" alt="${esc(f)}">`);
     else parts.push(`<a class="btn btn-ghost !py-2 !px-3 text-xs" href="${url}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`);
   }
   el.innerHTML = parts.join('');
@@ -1007,7 +1025,7 @@ function renderAiMsgs() {
   }
   box.innerHTML = S.ai.messages.map(m => {
     if (m.role === 'user') {
-      const imgs = (m.images || []).map(u => `<img src="${u}" style="width:120px;height:120px;object-fit:cover" class="rounded-xl mt-1.5">`).join('');
+      const imgs = (m.images || []).map(u => `<img src="${u}" style="width:120px;height:120px;object-fit:cover" class="rounded-xl mt-1.5 cursor-zoom-in" onclick="wcViewImage(this.src)" alt="图片">`).join('');
       return `<div class="flex justify-end"><div class="max-w-[80%] bg-gradient-to-r from-indigo-500 to-violet-500 text-white text-sm px-4 py-2.5 rounded-2xl rounded-br-md shadow-md shadow-indigo-500/20 whitespace-pre-wrap break-words">${esc(m.content)}${imgs}</div></div>`;
     }
     const trace = (m.trace || []).map(t => `<div class="muted mt-1">🔧 ${esc(t.tool)}</div>`).join('');
@@ -1063,6 +1081,68 @@ async function aiSend() {
     renderAiMsgs();
     try { localStorage.setItem('wc_ai_chat', JSON.stringify(S.ai.messages.slice(-50).map(m => ({ role: m.role, content: m.content, trace: m.trace })))); } catch (e) {}
   }
+}
+
+/* ---------- 图片全屏查看器：双指缩放 / 双击放大 / 拖动（2026-10-16） ---------- */
+function wcViewImage(src) {
+  const old = document.getElementById('wcImageViewer'); if (old) old.remove();
+  const v = document.createElement('div');
+  v.id = 'wcImageViewer';
+  v.innerHTML = `<div class="wciv-close" role="button" aria-label="关闭">✕</div>
+    <img src="${src}" alt="查看图片"><div class="wciv-hint">双指缩放 · 双击放大 · 点空白关闭</div>`;
+  document.body.appendChild(v);
+  const img = v.querySelector('img');
+  let scale = 1, tx = 0, ty = 0, pinchDist = 0, pinchScale = 1, lastTap = 0;
+  const apply = () => { img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+  const close = () => { v.remove(); document.removeEventListener('keydown', esc); };
+  const esc = e => { if (e.key === 'Escape') close(); };
+  v.querySelector('.wciv-close').addEventListener('click', e => { e.stopPropagation(); close(); });
+  v.addEventListener('click', e => { if (e.target === v || e.target === img) close(); });
+  document.addEventListener('keydown', esc);
+  /* 双击：1x ↔ 2.5x（以点击点为中心） */
+  img.addEventListener('click', e => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      const r = img.getBoundingClientRect();
+      const px = e.clientX - r.left - r.width / 2, py = e.clientY - r.top - r.height / 2;
+      if (scale > 1.05) { scale = 1; tx = 0; ty = 0; }
+      else { const ns = 2.5; tx -= px * (ns - scale); ty -= py * (ns - scale); scale = ns; }
+      apply();
+    }
+    lastTap = now;
+  });
+  /* 双指缩放 + 单指拖动 */
+  const pointers = new Map();
+  v.addEventListener('pointerdown', e => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    v.setPointerCapture && v.setPointerCapture(e.pointerId);
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchDist = Math.hypot(a.x - b.x, a.y - b.y); pinchScale = scale;
+    }
+  });
+  v.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const prev = pointers.get(e.pointerId);
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDist > 0) { scale = Math.min(8, Math.max(.4, pinchScale * d / pinchDist)); apply(); }
+    } else if (pointers.size === 1) {
+      img.classList.add('wcDragging');
+      tx += dx; ty += dy; apply();
+    }
+  });
+  const up = e => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchDist = 0;
+    if (pointers.size === 0) img.classList.remove('wcDragging');
+  };
+  v.addEventListener('pointerup', up);
+  v.addEventListener('pointercancel', up);
 }
 
 /* ---------- 初始化 ---------- */
