@@ -609,7 +609,7 @@ async function uploadCert(input) {
   const buf = await f.arrayBuffer();
   let b64 = '';
   const u8 = new Uint8Array(buf);
-  for (let i = 0; i < u8.length; i += 32768) b64 += String.fromCharCode(...u8.subarray(i, i + 32768));
+  for (let i = 0; i < u8.length; i += 32768) b64 += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
   b64 = btoa(b64);
   try {
     const r = await api('/api/certificates', { method: 'POST', body: { name: f.name, data: b64 } });

@@ -1023,12 +1023,18 @@ async function renderCertsInto(el, certs) {
   el.innerHTML = parts.join('');
 }
 function pickCert() { $('certFile').click(); }
+/* 大文件分块 base64：一次性展开（spread）在约 1MB+ 时触发 RangeError（调用栈上限） */
+function wcBufToB64(buf) {
+  const u8 = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+  return btoa(bin);
+}
 async function uploadCert(input) {
   const f = input.files[0]; if (!f) return;
   if (f.size > 50 * 1024 * 1024) { toast('文件过大（上限 50MB）', 'err'); input.value = ''; return; }
-  const buf = await f.arrayBuffer();
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
   try {
+  const b64 = wcBufToB64(await f.arrayBuffer());
     const r = await api('/api/certificates', { method: 'POST', body: { name: f.name, data: b64 } });
     AWARD_CERTS.push(r.filename);
     renderCertList();

@@ -70,3 +70,30 @@ class CertificateSyncTests(unittest.TestCase):
         # 配对手机无权开票据（非 phone_paths）
         self.assertEqual(self.request('POST', '/api/attachment_ticket', {'name': 'same.png'},
                                      headers={'X-Sync-Token': 'phone'})[0], 403)
+
+    def test_attachment_ticket_handles_unicode_and_spaces(self):
+        """中文/带空格附件名：URL 编码后票据仍能正确绑定与打开（0.5.0 修复项）。"""
+        import http.client
+        from urllib.parse import quote
+        names = ['获奖证书 2026.pdf', '中文凭证.png', 'with space.jpg']
+        self.store.upsert_award(new_award('Test2', certificate_files=names))
+        for name in names:
+            Path(self.store.certificates_dir, name).write_bytes(b'UNICODE-OK ' + name.encode('utf-8'))
+        auth = {'X-API-Token': self.api.token}
+        for name in names:
+            status, _, ticket = self.request('POST', '/api/attachment_ticket', {'name': name}, headers=auth)
+            self.assertEqual(status, 200, name)
+            self.assertIn(quote(name), ticket['url'])
+            conn = http.client.HTTPConnection('127.0.0.1', self.api.port, timeout=3)
+            conn.request('GET', ticket['url'])
+            r = conn.getresponse()
+            body = r.read()
+            conn.close()
+            self.assertEqual(r.status, 200, name)
+            self.assertTrue(body.startswith(b'UNICODE-OK'), name)
+        # 手工构造未编码的中文路径 + 有效票据：同样放行（服务端统一解码）
+        status, _, ticket = self.request('POST', '/api/attachment_ticket', {'name': names[0]}, headers=auth)
+        conn = http.client.HTTPConnection('127.0.0.1', self.api.port, timeout=3)
+        conn.request('GET', '/certificates/' + quote(names[0]) + '?ticket=' + ticket['ticket'])
+        r = conn.getresponse(); r.read(); conn.close()
+        self.assertEqual(r.status, 200)

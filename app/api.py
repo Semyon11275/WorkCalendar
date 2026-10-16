@@ -240,10 +240,13 @@ class ApiHandler(BaseHTTPRequestHandler):
                 authorized = value and secrets.compare_digest(value.value, self.app.browser_session)
             except Exception:
                 authorized = False
+            # 票据绑定的是解码后的文件名；路径需 unquote（中文/空格会百分号编码）。
+            # 文件名用普通相等即可——授权凭据是随机票据本身（pop 一次性），名称只做绑定校验。
             ticket = parse_qs(parsed.query).get("ticket", [""])[0]
             entry = self.app.attachment_tickets.pop(ticket, None) if ticket else None
+            from urllib.parse import unquote as _unquote
             ticket_ok = bool(entry and entry[1] > time.time()
-                             and secrets.compare_digest(entry[0], os.path.basename(path.rstrip("/"))))
+                             and entry[0] == _unquote(os.path.basename(path.rstrip("/"))))
             if not ticket_ok and (not authorized or not self._is_loopback()):
                 return self._send_error(401, "凭证访问需要本机授权")
         try:
@@ -592,8 +595,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         now = time.time()
         self.app.attachment_tickets = {k: v for k, v in self.app.attachment_tickets.items() if v[1] > now}
         self.app.attachment_tickets[ticket] = (name, now + 60)
+        from urllib.parse import quote as _quote
         self._send(200, {"ok": True, "ticket": ticket,
-                         "url": f"/certificates/{name}?ticket={ticket}"})
+                         "url": f"/certificates/{_quote(name)}?ticket={ticket}"})
 
     def _api_certificates(self, method, rest, qs):
         """POST /api/certificates —— 上传证书凭证文件 {name, data(base64)}。"""

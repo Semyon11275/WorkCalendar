@@ -81,25 +81,40 @@
     }
   }
 
-  /* 批量后台生成：并发限制 MAX_CONCURRENCY；完成后统一 toast 一次 */
-  function ensureAll(fnames) {
-    const queue = (fnames || []).filter(function (f) { return IMG_RE.test(f) && !done.has(f) && !inflight.has(f); });
-    let made = 0, left = queue.length;
-    if (!left) return;
-    let cursor = 0;
-    const worker = function () {
-      if (cursor >= queue.length) return Promise.resolve();
-      const f = queue[cursor++];
-      return ensure(f).then(function (ok) {
-        if (ok) made++;
-      }).then(worker);
-    };
-    Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, worker))
-      .then(function () {
-        if (made && typeof window.toast === 'function') {
-          toast('已生成 ' + made + ' 张压缩预览图，手机同步更省流量');
+  /* 全局共享队列：所有入口（获奖页批量、详情页、设置页按钮）共用一组 worker，
+     并发上限是全局的 MAX_CONCURRENCY——同时触发多个批次也不会叠加 */
+  const queue = [];
+  const queued = new Set();
+  let active = 0, batchMade = 0;
+  function pump() {
+    while (active < MAX_CONCURRENCY && queue.length) {
+      const f = queue.shift();
+      queued.delete(f);
+      active++;
+      ensure(f).then(function (ok) {
+        if (ok) batchMade++;
+      }).finally(function () {
+        active--;
+        if (active === 0 && queue.length === 0) {
+          /* 整体空闲：汇报本轮生成数量并复位计数 */
+          if (batchMade && typeof window.toast === 'function') {
+            toast('已生成 ' + batchMade + ' 张压缩预览图，手机同步更省流量');
+          }
+          batchMade = 0;
+        } else {
+          pump();
         }
       });
+    }
+  }
+  function ensureAll(fnames) {
+    (fnames || []).forEach(function (f) {
+      if (IMG_RE.test(f) && !done.has(f) && !inflight.has(f) && !queued.has(f)) {
+        queued.add(f);
+        queue.push(f);
+      }
+    });
+    pump();
   }
 
   /* 待生成数量（done/inflight 之外的图片凭证）——设置页按钮用于判断是否已全部就绪 */
