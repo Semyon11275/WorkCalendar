@@ -570,12 +570,23 @@ function importRecordsLocal(records) {
   return report;
 }
 /* 证书 URL：本地模式读文件转 data URL，桌面模式走 /certificates/ 静态路由 */
+/* 内容类型判定：优先按 base64 魔数嗅探（预览图以原名落盘，png/webp/gif
+   的本地文件内容可能是 JPEG），嗅探不出再按扩展名回退 */
+function certDataMime(data, fname) {
+  const d = String(data || '');
+  if (d.startsWith('/9j/')) return 'image/jpeg';
+  if (d.startsWith('iVBORw0KGgo')) return 'image/png';
+  if (d.startsWith('R0lGOD')) return 'image/gif';
+  if (d.startsWith('UklGR')) return 'image/webp';
+  if (d.startsWith('JVBER')) return 'application/pdf';
+  return /\.(jpe?g)$/i.test(fname) ? 'image/jpeg' : /\.png$/i.test(fname) ? 'image/png'
+    : /\.webp$/i.test(fname) ? 'image/webp' : /\.gif$/i.test(fname) ? 'image/gif' : 'application/pdf';
+}
 async function certUrl(fname) {
   if (!IS_LOCAL) return '/certificates/' + encodeURIComponent(fname);
   try {
     const r = await window.Capacitor.Plugins.Filesystem.readFile({ path: LOC_DIR + '/certificates/' + fname, directory: DIR_DATA });
-    const mime = /\.(jpe?g)$/i.test(fname) ? 'image/jpeg' : /\.png$/i.test(fname) ? 'image/png' : /\.webp$/i.test(fname) ? 'image/webp' : /\.gif$/i.test(fname) ? 'image/gif' : 'application/pdf';
-    return 'data:' + mime + ';base64,' + r.data;
+    return 'data:' + certDataMime(r.data, fname) + ';base64,' + r.data;
   } catch (e) { return ''; }
 }
 /* ================= 数据同步（手机 ↔ 电脑，局域网） ================= */
