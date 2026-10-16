@@ -831,12 +831,28 @@ async function scanPair() {
 }
 /* ================= 全局状态 ================= */
 const S = {
-  comps: [], stats: null, view: 'overview',
-  filter: { keyword: '', cats: [], statuses: [] },
+  comps: [], compsAll: null, stats: null, view: 'overview',
+  filter: { keyword: '', cats: [], statuses: [], showAll: false },
   sort: { key: 'deadline', order: 'asc' },
   editingId: null, importHistory: [],
   charts: {}, dark: false,
 };
+/* ================= 过期隐藏（2026-10-17） =================
+   截止已过 5 天且未标「已完成」→ 默认从列表/时间线隐藏；
+   关键词搜索、显式状态筛选或「全览」时可见。 */
+function isStaleHidden(c) {
+  if ((c.status || '') === 'done') return false;
+  if (!c.deadline) return false;
+  return daysBetween(localToday(), c.deadline) >= 5;
+}
+function applyStaleHide(comps) {
+  if (S.filter.keyword || (S.filter.statuses && S.filter.statuses.length) || S.filter.showAll) return comps || [];
+  return (comps || []).filter(c => !isStaleHidden(c));
+}
+function staleHiddenCount() {
+  if (!S.compsAll) return 0;
+  return S.compsAll.filter(isStaleHidden).length;
+}
 const $ = (id) => document.getElementById(id);
 const STATUS_COLOR = {
   urgent: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',

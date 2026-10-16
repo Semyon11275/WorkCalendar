@@ -161,7 +161,8 @@ async function refresh() {
   if (S.filter.statuses.length) S.filter.statuses.forEach(s => q.append('status', s));
   q.set('sort', S.sort.key); q.set('order', S.sort.order);
   const [list, stats] = await Promise.all([api('/api/competitions?' + q), api('/api/stats')]);
-  S.comps = list.competitions; S.stats = stats;
+  S.compsAll = list.competitions;
+  S.comps = applyStaleHide(list.competitions); S.stats = stats;
   const snap = JSON.stringify([S.comps, S.stats, S.filter, S.sort]);
   if (snap !== _lastDataSnap) { _lastDataSnap = snap; render(); }
 }
@@ -255,7 +256,9 @@ function renderComps() {
       <input id="searchBox" class="input !pl-10 !rounded-full" placeholder="搜比赛 / 主办方 / 备注…" value="${esc(S.filter.keyword)}" autocomplete="off">
     </div>
     <div class="flex gap-2 mb-3 overflow-x-auto pb-1" style="scrollbar-width:none">
-      ${chip('全部', [])}${chip('🔥 进行中', ['submitting', 'open', 'urgent', 'not_started'])}${chip('⏰ 已过期', ['past_suggested', 'overdue'])}${chip('✅ 已交', ['submitted', 'done'])}
+      <span class="chip ${!cur.length && !S.filter.showAll ? 'chip-on' : 'chip-off'}" onclick="setStatusFilter([])">全部</span>
+      <span class="chip ${S.filter.showAll && !cur.length ? 'chip-on' : 'chip-off'}" onclick="setStatusFilter('ALL')">👁 全览</span>
+      ${chip('🔥 进行中', ['submitting', 'open', 'urgent', 'not_started'])}${chip('⏰ 已过期', ['past_suggested', 'overdue'])}${chip('✅ 已交', ['submitted', 'done'])}
     </div>`;
   if (cur.length) html += `<div class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-700/40 text-xs">
       已筛选 ${show.length} 条 <button class="btn btn-ghost !py-1 !px-2.5 text-[11px] ml-auto" onclick="setStatusFilter([])">✕ 清除</button></div>`;
@@ -285,6 +288,10 @@ function renderComps() {
       </div>
     </div>`; }).join('') + `</div>
     <div class="text-center muted py-4">共 ${show.length} 条 · 点右下角 ＋ 添加</div>`;
+  const hiddenN = staleHiddenCount();
+  if (hiddenN && !S.filter.showAll && !S.filter.keyword && !S.filter.statuses.length) {
+    html += `<div class="text-center muted py-2 text-[11px]">🙈 已隐藏 ${hiddenN} 条过期超 5 天未完成的 · <span class="underline" onclick="setStatusFilter('ALL')">查看全览</span></div>`;
+  }
   $('view-comps').innerHTML = html; bindSearch();
 }
 function bindSearch() {
@@ -292,7 +299,8 @@ function bindSearch() {
   sb.addEventListener('input', debounce(() => { S.filter.keyword = sb.value; refresh(); }, 300));
 }
 function setStatusFilter(s) {
-  S.filter.statuses = Array.isArray(s) ? s : [s];
+  if (s === 'ALL') { S.filter.statuses = []; S.filter.showAll = true; }
+  else { S.filter.statuses = Array.isArray(s) ? s : [s]; S.filter.showAll = false; }
   go('comps'); refresh();
 }
 
