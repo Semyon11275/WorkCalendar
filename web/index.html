@@ -834,6 +834,8 @@ function renderAwards() {
     </select>
     <label class="flex items-center gap-1.5 text-sm cursor-pointer select-none"><input id="awardFirstOnly" type="checkbox" class="w-4 h-4 accent-amber-500" ${S_AWARDS.filter.first ? 'checked' : ''}> 只看一作/独立</label>
     <div class="flex-1"></div>
+    <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="setAllAwardGroups(true)" title="展开所有分组">⊞ 全部展开</button>
+    <button class="btn btn-ghost !py-1 !px-2.5 text-xs" onclick="setAllAwardGroups(false)" title="折叠所有分组">⊟ 全部折叠</button>
     <span class="muted text-xs">💡 获奖记录可帮你判断该冲什么级别的比赛</span>
   </div>`;
   const show = S_AWARDS.list;
@@ -846,23 +848,32 @@ function renderAwards() {
     $('view-awards').innerHTML = html; return;
   }
   // 按比赛分组：同系列比赛只显示一次组标题，避免重复（2026-08-11）
+  // 2026-10-16：分组支持折叠，方便多组时快速浏览（状态记忆在 localStorage）
   const groups = {};
   for (const a of show) {
     const key = a.competition || '其他';
     (groups[key] = groups[key] || []).push(a);
   }
   const groupKeys = Object.keys(groups).sort((x, y) => groups[y].length - groups[x].length);
-  for (const key of groupKeys) {
+  S_AWARDS._groupKeys = groupKeys;
+  for (let gi = 0; gi < groupKeys.length; gi++) {
+    const key = groupKeys[gi];
     const items = groups[key];
     const firstCnt = items.filter(x => x.is_first_author).length;
+    const open = awardGroupOpen(key, items.length);
+    const latest = items.map(x => x.award_date || '').filter(Boolean).sort().pop();
+    const lvlSum = items.reduce((m, x) => { if (x.level) m[x.level] = (m[x.level] || 0) + 1; return m; }, {});
+    const lvlText = Object.keys(lvlSum).map(k => k + '×' + lvlSum[k]).join(' · ');
     html += `<div class="card overflow-x-auto mb-3">
-      <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-700/30 border-b border-slate-200/60 dark:border-slate-700/50 flex items-center gap-2 flex-wrap">
+      <div class="px-4 py-2.5 bg-slate-50/80 dark:bg-slate-700/30 border-b border-slate-200/60 dark:border-slate-700/50 flex items-center gap-2 flex-wrap cursor-pointer select-none hover:bg-slate-100/80 dark:hover:bg-slate-700/50" onclick="toggleAwardGroup(${gi})" title="${open ? '折叠' : '展开'}该比赛的获奖明细">
+        <span id="awc_${gi}" class="text-slate-400 text-[10px] transition-transform ${open ? 'rotate-90' : ''}">▶</span>
         <span class="font-semibold text-sm truncate">🏁 ${esc(key)}</span>
         <span class="badge bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-300">${items.length} 条</span>
         ${firstCnt ? `<span class="badge bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">✍️ 一作 ${firstCnt}</span>` : ''}
-        <span class="muted text-xs ml-auto">${items[0].award_date ? fmtDate(items[0].award_date) : ''}</span>
+        <span class="muted text-xs">${esc(lvlText)}</span>
+        <span class="muted text-xs ml-auto">${latest ? fmtDate(latest) : ''}</span>
       </div>
-      <table class="w-full min-w-[860px]"><thead class="bg-slate-50/80 dark:bg-slate-700/30"><tr>
+      <table id="awg_${gi}" class="w-full min-w-[860px]" ${open ? '' : 'style="display:none"'}><thead class="bg-slate-50/80 dark:bg-slate-700/30"><tr>
         <th>奖项</th><th>级别</th><th>奖项等级</th><th>作者</th><th>获奖日期</th><th>凭证</th><th class="text-right">操作</th></tr></thead><tbody>`;
     for (const a of items) {
       const firstBadge = a.is_first_author ? `<span class="badge bg-amber-50 text-amber-600 border border-amber-200/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700">✍️ 一作</span>` : `<span class="badge bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400">${esc(a.role || '参与')}</span>`;
@@ -890,6 +901,42 @@ function renderAwards() {
   const fo = $('awardFirstOnly'); if (fo) fo.onchange = () => { setAwardFilter('first', fo.checked ? '1' : ''); };
 }
 function debounce(fn, ms) { let t = null; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+/* ---------- 获奖分组折叠（2026-10-16） ---------- */
+/* 状态记忆在 localStorage（wc_awards_groups）：
+   - 用户手动点过的组记住开/合；
+   - 未操作过的组：多条默认折叠、单条默认展开；
+   - 检索/筛选时自动展开，方便看结果。 */
+function awardGroupSaved() {
+  try { return JSON.parse(localStorage.getItem('wc_awards_groups') || '{}') || {}; } catch (e) { return {}; }
+}
+function awardGroupOpen(key, count) {
+  if (S_AWARDS.filter.keyword || S_AWARDS.filter.level || S_AWARDS.filter.first) return true;
+  const saved = awardGroupSaved();
+  if (key in saved) return !!saved[key];
+  return count <= 1;
+}
+function toggleAwardGroup(gi) {
+  const key = (S_AWARDS._groupKeys || [])[gi];
+  if (key === undefined) return;
+  const tbl = $('awg_' + gi), chev = $('awc_' + gi);
+  const nowOpen = !!(tbl && tbl.style.display !== 'none');
+  if (tbl) tbl.style.display = nowOpen ? 'none' : '';
+  if (chev) chev.classList.toggle('rotate-90', !nowOpen);
+  const saved = awardGroupSaved();
+  saved[key] = !nowOpen;
+  try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
+}
+function setAllAwardGroups(open) {
+  const keys = S_AWARDS._groupKeys || [];
+  const saved = awardGroupSaved();
+  keys.forEach((key, gi) => {
+    saved[key] = open;
+    const tbl = $('awg_' + gi), chev = $('awc_' + gi);
+    if (tbl) tbl.style.display = open ? '' : 'none';
+    if (chev) chev.classList.toggle('rotate-90', open);
+  });
+  try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
+}
 function setAwardFilter(kind, val) {
   if (kind === 'level') S_AWARDS.filter.level = val;
   else if (kind === 'first') S_AWARDS.filter.first = !!val;
