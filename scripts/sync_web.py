@@ -15,6 +15,10 @@ shutil.copytree(root / 'web/assets', target / 'assets', dirs_exist_ok=True,
 shutil.copytree(root / 'LICENSES', target / 'licenses', dirs_exist_ok=True)
 for document in ['LICENSE', 'THIRD_PARTY_NOTICES.md']:
     shutil.copy2(root / document, target / 'licenses' / document)
+# 清理历史同步进 www 的字体（仅忽略规则不够，旧文件会残留）
+for font in (target / 'assets').glob('SourceHanSerifCN-*'):
+    if font.is_file():
+        font.unlink()
 (target / 'seed').mkdir(exist_ok=True)
 for field in ['competitions', 'awards']:
     (target / 'seed' / (field + '.json')).write_text(json.dumps({'schema_version': 1, field: []}), encoding='utf-8')

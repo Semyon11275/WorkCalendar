@@ -484,13 +484,14 @@ function renderAwards() {
     html += sampleAwardCards();
     $('view-awards').innerHTML = html; return;
   }
-  const groups = {};
-  for (const a of show) { const key = a.competition || '其他'; (groups[key] = groups[key] || []).push(a); }
-  const groupKeys = Object.keys(groups).sort((x, y) => groups[y].length - groups[x].length);
+  /* Map 防原型链冲突：比赛名为 constructor/__proto__ 等时普通对象会出错 */
+  const groups = new Map();
+  for (const a of show) { const key = a.competition || '其他'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(a); }
+  const groupKeys = [...groups.keys()].sort((x, y) => groups.get(y).length - groups.get(x).length);
   S_AWARDS._groupKeys = groupKeys;
   for (let gi = 0; gi < groupKeys.length; gi++) {
     const key = groupKeys[gi];
-    const items = groups[key];
+    const items = groups.get(key);
     const open = awardGroupOpen(key, items.length);
     const fc = items.filter(x => x.is_first_author).length;
     const lvlSum = items.reduce((m, x) => { if (x.level) m[x.level] = (m[x.level] || 0) + 1; return m; }, {});

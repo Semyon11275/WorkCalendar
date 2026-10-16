@@ -1,18 +1,20 @@
-/* ================= 证书预览图（PC 端，2026-10-17） =================
-   为图片类凭证生成 <原名>_preview.jpg（长边 ≤1600px，目标 ~200KB），
+/* ================= 证书预览图（PC 端，2026-10-17；0.5.0 修订） =================
+   为图片类凭证生成 <原名>.preview.jpg（长边 ≤1600px，目标 ~200KB），
    通过 POST /api/certificates 存回 data/certificates/。
-   手机同步（core.js syncCertificates）优先取预览图、以原名落盘——
-   传输量从每张数 MB 降到 ~200KB；原件保留在电脑上作为存档。
-   触发点：award 上传后立即生成；详情页展示图片凭证时后台补生成。
-   PDF 无法前端压缩，不做预览（手机回退原件）。 */
+   手机经 /api/sync_certificate?preview=1 拉取预览并以独立文件落盘（原名.preview.jpg），
+   原件与预览互不覆盖；电脑展示始终用原件。
+   命名含完整原名（a.png.preview.jpg），避免 a.png / a.jpg 同挤 a_preview.jpg 冲突。
+   触发：上传后即时生成；详情页/获奖页后台补齐（并发限制 2，防内存峰值）。
+   幂等：生成前先探测已有预览（跨重启也生效）；失败不标记完成，本会话可重试。 */
 (function () {
   'use strict';
   if (window.__wcCertPreview) return;
   const IMG_RE = /\.(jpe?g|png|webp|gif)$/i;
-  const done = new Set();      /* 本会话已处理（成功/确认无需） */
+  const done = new Set();      /* 已存在或已生成（成功才入列，失败可重试） */
   const inflight = new Set();
+  const MAX_CONCURRENCY = 2;
 
-  function previewName(f) { return f.replace(/(\.[^.]+)$/, '_preview.jpg'); }
+  function previewName(f) { return f + '.preview.jpg'; }
 
   function toJpeg(blob, maxEdge, quality) {
     return createImageBitmap(blob).then(function (bmp) {
@@ -55,37 +57,49 @@
     } catch (e) { return false; }
   }
 
-  /* 后台补生成（详情页展示时逐个调用）；返回是否新生成了预览 */
+  /* 后台补生成（详情页/获奖页调用）；返回是否新生成了预览。
+     幂等：先探测已有预览（200 → 直接标记完成，跨重启有效）；
+     失败不标记完成——本会话再次触发可重试。 */
   async function ensure(fname) {
     if (!IMG_RE.test(fname) || done.has(fname) || inflight.has(fname)) return false;
     inflight.add(fname);
     try {
+      try {
+        const probe = await fetch('/certificates/' + encodeURIComponent(previewName(fname)), { credentials: 'same-origin' });
+        if (probe.ok) { done.add(fname); return false; }  /* 已有预览 */
+      } catch (e) { /* 探测失败按无预览处理，走生成 */ }
       const resp = await fetch('/certificates/' + encodeURIComponent(fname), { credentials: 'same-origin' });
-      if (!resp.ok) { done.add(fname); return false; }
+      if (!resp.ok) return false;  /* 原件缺失：不标记完成，留待重试 */
       const orig = await resp.blob();
       const made = await generateFromFile(fname, orig);
-      done.add(fname);
+      if (made) done.add(fname);
       return made;
     } catch (e) {
-      done.add(fname);
-      return false;
+      return false;  /* 失败可重试 */
     } finally {
       inflight.delete(fname);
     }
   }
 
-  /* 批量后台生成：完成后统一 toast 一次 */
+  /* 批量后台生成：并发限制 MAX_CONCURRENCY；完成后统一 toast 一次 */
   function ensureAll(fnames) {
-    let made = 0, left = 0;
-    (fnames || []).filter(IMG_RE.test.bind(IMG_RE)).forEach(function (f) {
-      left++;
-      ensure(f).then(function (ok) {
+    const queue = (fnames || []).filter(function (f) { return IMG_RE.test(f) && !done.has(f) && !inflight.has(f); });
+    let made = 0, left = queue.length;
+    if (!left) return;
+    let cursor = 0;
+    const worker = function () {
+      if (cursor >= queue.length) return Promise.resolve();
+      const f = queue[cursor++];
+      return ensure(f).then(function (ok) {
         if (ok) made++;
-        if (--left === 0 && made && typeof window.toast === 'function') {
+      }).then(worker);
+    };
+    Promise.all(Array.from({ length: Math.min(MAX_CONCURRENCY, queue.length) }, worker))
+      .then(function () {
+        if (made && typeof window.toast === 'function') {
           toast('已生成 ' + made + ' 张压缩预览图，手机同步更省流量');
         }
       });
-    });
   }
 
   /* 待生成数量（done/inflight 之外的图片凭证）——设置页按钮用于判断是否已全部就绪 */

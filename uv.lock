@@ -72,7 +72,7 @@ wheels = [
 
 [[package]]
 name = "design-schedule"
-version = "0.4.2"
+version = "0.5.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pyinstaller" },

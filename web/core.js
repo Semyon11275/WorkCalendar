@@ -2,7 +2,7 @@
 /* ================= 本地数据后端（安卓版：无 Python 后端，JS 复刻全部逻辑） ================= */
 /* 桌面版（浏览器/WebView 访问 http://127.0.0.1）走 fetch；安卓 Capacitor 原生环境走本地后端。 */
 const IS_LOCAL = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-const VERSION_LOCAL = '0.4.2';
+const VERSION_LOCAL = '0.5.0';
 const DEFAULT_BUFFER_DAYS = 3;
 const URGENT_DAYS = 7;
 const VALID_OVERRIDES = ['submitted', 'done', 'abandoned'];
@@ -570,8 +570,8 @@ function importRecordsLocal(records) {
   return report;
 }
 /* 证书 URL：本地模式读文件转 data URL，桌面模式走 /certificates/ 静态路由 */
-/* 内容类型判定：优先按 base64 魔数嗅探（预览图以原名落盘，png/webp/gif
-   的本地文件内容可能是 JPEG），嗅探不出再按扩展名回退 */
+/* 内容类型判定：优先按 base64 魔数嗅探（预览图内容可能是 JPEG 而原名是
+   png/webp/gif），嗅探不出再按扩展名回退 */
 function certDataMime(data, fname) {
   const d = String(data || '');
   if (d.startsWith('/9j/')) return 'image/jpeg';
@@ -582,12 +582,20 @@ function certDataMime(data, fname) {
   return /\.(jpe?g)$/i.test(fname) ? 'image/jpeg' : /\.png$/i.test(fname) ? 'image/png'
     : /\.webp$/i.test(fname) ? 'image/webp' : /\.gif$/i.test(fname) ? 'image/gif' : 'application/pdf';
 }
+/* 手机端读取凭证：预览图（<原名>.preview.jpg，同步自电脑的压缩版）优先，
+   原件回退——原件与预览分开存储，互不覆盖 */
 async function certUrl(fname) {
   if (!IS_LOCAL) return '/certificates/' + encodeURIComponent(fname);
-  try {
-    const r = await window.Capacitor.Plugins.Filesystem.readFile({ path: LOC_DIR + '/certificates/' + fname, directory: DIR_DATA });
-    return 'data:' + certDataMime(r.data, fname) + ';base64,' + r.data;
-  } catch (e) { return ''; }
+  const fs = window.Capacitor?.Plugins?.Filesystem;
+  if (!fs) return '';
+  const read = async path => {
+    try { return (await fs.readFile({ path, directory: DIR_DATA })).data; } catch (e) { return ''; }
+  };
+  let data = '';
+  if (/\.(jpe?g|png|webp|gif)$/i.test(fname)) data = await read(LOC_DIR + '/certificates/' + fname + '.preview.jpg');
+  if (!data) data = await read(LOC_DIR + '/certificates/' + fname);
+  if (!data) return '';
+  return 'data:' + certDataMime(data, fname) + ';base64,' + data;
 }
 /* ================= 数据同步（手机 ↔ 电脑，局域网） ================= */
 function syncToken() {
@@ -655,44 +663,56 @@ async function syncPull() {
   } catch (e) { toast('拉取失败：' + e.message, 'err'); if ($('syncResult')) $('syncResult').textContent = '拉取失败：' + e.message; }
   finally { if (btn) { btn.disabled = false; btn.textContent = '📥 从电脑拉取'; } }
 }
-/* 逐个下载电脑端 data/certificates/ 里被获奖记录引用、本地缺失的凭证文件。
-   图片凭证优先取电脑端生成的压缩预览图（<原名>_preview.jpg，~200KB），
-   以原名落盘——查看与体积都与原件体验一致，传输量大幅下降（2026-10-17）。 */
+/* 逐个同步电脑端被获奖记录引用的凭证（0.5.0 起走 /api/sync_certificate，
+   配对令牌授权，旧版桌面无此接口）。
+   - 图片：优先预览 <原名>.preview.jpg（~200KB）独立落盘，原件永不覆盖；
+     电脑无预览则回退原件（本地已有原件时跳过下载）
+   - 非图片（PDF 等）：原件落盘，已有则跳过
+   - 客户端先做文件名校验（路径穿越/非法名计入失败）
+   - 汇总 新下载/已有/失败 计数并提示（旧桌面会全部失败并给出升级提示） */
 async function syncCertificates(base, awards) {
-  if (!IS_LOCAL || !window.Capacitor?.Plugins?.Filesystem) return;
+  if (!IS_LOCAL || !window.Capacitor?.Plugins?.Filesystem) return { failed: 0 };
   const fs = window.Capacitor.Plugins.Filesystem;
-  const names = [...new Set((awards || []).flatMap(a => a.certificate_files || []))];
-  if (!names.length) return;
+  const all = [...new Set((awards || []).flatMap(a => a.certificate_files || []))];
+  if (!all.length) return { failed: 0 };
   await LOC.init();
-  let done = 0, fetched = 0;
-  const token = syncToken();
-  const headers = token ? { 'X-Sync-Token': token } : {};
-  for (const name of names) {
+  let downloaded = 0, have = 0, failed = 0, oldServer = false;
+  const exists = async name => {
+    try { await fs.stat({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA }); return true; }
+    catch (e) { return false; }
+  };
+  const write = async (name, data) => {
+    await fs.writeFile({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA,
+      data: data, recursive: true });
+  };
+  for (const name of all) {
+    if (!name || /[\/:]/.test(name) || name === '.' || name === '..') { failed++; continue; }
+    const isImg = /\.(jpe?g|png|webp|gif)$/i.test(name);
     try {
-      let res = null, isPreview = false;
-      if (/\.(jpe?g|png|webp|gif)$/i.test(name)) {
-        /* 直接拉预览：命中即用（200 时响应体就是预览数据，无额外探测开销） */
-        const pv = name.replace(/(\.[^.]+)$/, '_preview.jpg');
-        res = await fetch(base + '/certificates/' + encodeURIComponent(pv), { headers, credentials: 'omit' });
-        if (res.ok) isPreview = true;
+      let got = false;
+      if (isImg) {
+        /* 预览优先：独立文件，总是刷新（电脑端重生成更优版本后自动跟上） */
+        try {
+          const r = await httpReq(base, '/api/sync_certificate?name=' + encodeURIComponent(name) + '&preview=1', { sync: true });
+          if (r && r.ok) { await write(name + '.preview.jpg', r.data); downloaded++; got = true; }
+          else if (r && r.error && /未知路径|404/.test(String(r.error))) oldServer = true;
+        } catch (e) { if (String(e.message || e).includes('404')) oldServer = true; }
       }
-      if (!res || !res.ok) {
-        /* 无预览：本地已有原件则跳过 */
-        try { await fs.stat({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA }); done++; continue; } catch (e) { /* 本地无 → 下载原件 */ }
-        res = await fetch(base + '/certificates/' + encodeURIComponent(name), { headers, credentials: 'omit' });
+      if (!got) {
+        if (await exists(name)) { have++; continue; }
+        const r = await httpReq(base, '/api/sync_certificate?name=' + encodeURIComponent(name), { sync: true });
+        if (r && r.ok) { await write(name, r.data); downloaded++; }
+        else { failed++; if (r && /未知路径/.test(String(r.error || ''))) oldServer = true; }
       }
-      if (!res.ok) continue;
-      const buf = new Uint8Array(await res.arrayBuffer());
-      let bin = '';
-      for (let i = 0; i < buf.length; i += 32768) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 32768));
-      await fs.writeFile({ path: LOC_DIR + '/certificates/' + name, directory: DIR_DATA,
-        data: btoa(bin), recursive: true });
-      fetched++;
-      void isPreview;
-    } catch (e) { /* 单个失败跳过，不阻断整体 */ }
-    done++;
-    if (done === names.length && fetched > 0) toast(`凭证已同步 ${fetched}/${names.length} 个，点开即可查看`);
+    } catch (e) { failed++; }
   }
+  if (downloaded || have || failed) {
+    let msg = `凭证同步：新下载 ${downloaded} · 已有 ${have}` + (failed ? ` · 失败 ${failed}` : '');
+    if (oldServer) msg += '（电脑版需更新到 0.5.0+ 才支持附件同步）';
+    else if (failed) msg += '（失败项多为电脑上已删除的文件）';
+    toast(msg, failed ? 'warn' : 'ok');
+  }
+  return { failed };
 }
 async function syncPush() {
   const base = syncAddr();

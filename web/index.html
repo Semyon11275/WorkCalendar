@@ -859,16 +859,18 @@ function renderAwards() {
   }
   // 按比赛分组：同系列比赛只显示一次组标题，避免重复（2026-08-11）
   // 2026-10-16：分组支持折叠，方便多组时快速浏览（状态记忆在 localStorage）
-  const groups = {};
+  /* Map 防原型链冲突：比赛名为 constructor/__proto__ 等时普通对象会出错 */
+  const groups = new Map();
   for (const a of show) {
     const key = a.competition || '其他';
-    (groups[key] = groups[key] || []).push(a);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(a);
   }
-  const groupKeys = Object.keys(groups).sort((x, y) => groups[y].length - groups[x].length);
+  const groupKeys = [...groups.keys()].sort((x, y) => groups.get(y).length - groups.get(x).length);
   S_AWARDS._groupKeys = groupKeys;
   for (let gi = 0; gi < groupKeys.length; gi++) {
     const key = groupKeys[gi];
-    const items = groups[key];
+    const items = groups.get(key);
     const firstCnt = items.filter(x => x.is_first_author).length;
     const open = awardGroupOpen(key, items.length);
     const latest = items.map(x => x.award_date || '').filter(Boolean).sort().pop();
@@ -990,6 +992,14 @@ function renderCertList() {
       <button class="hover:text-rose-500" onclick="removeCert(${i})" title="移除">✕</button>
     </span>`).join('');
 }
+/* 附件（PDF 等）经一次性票据在外部浏览器打开——外部无会话 Cookie，直链会 401（0.5.0） */
+async function openAttachment(fname) {
+  try {
+    const t = await api('/api/attachment_ticket', { method: 'POST', body: { name: fname } });
+    if (t && t.ok && t.url) { window.open(t.url, '_blank'); return; }
+    toast('附件打开失败：' + ((t && t.error) || '未知错误'), 'err');
+  } catch (e) { toast('附件打开失败：' + e.message, 'err'); }
+}
 async function renderCertsInto(el, certs) {
   if (!el) return;
   certs = certs || [];
@@ -997,7 +1007,7 @@ async function renderCertsInto(el, certs) {
   if (!IS_LOCAL) {
     el.innerHTML = certs.map(f => /\.(jpe?g|png|webp|gif)$/i.test(f)
       ? `<div class="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600"><img src="/certificates/${encodeURIComponent(f)}" class="w-full h-auto cursor-pointer" onclick="window.open('/certificates/${encodeURIComponent(f)}','_blank')" title="点击放大"></div>`
-      : `<a class="btn btn-ghost !py-1.5 !px-3 text-xs" href="/certificates/${encodeURIComponent(f)}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`).join('');
+      : `<button class="btn btn-ghost !py-1.5 !px-3 text-xs" onclick="openAttachment('${esc(f).replace(/'/g, "\'")}')">📄 ${esc(f)}</button>`).join('');
     /* 后台为图片凭证补生成压缩预览图（手机同步用），完成后统一提示 */
     if (window.wcCertPreview) wcCertPreview.ensureAll(certs);
     return;

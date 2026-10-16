@@ -27,7 +27,7 @@ from .models import (Award, Competition, SCHEMA_VERSION, ValidationError,
 from . import ai as aimod
 from .storage import Store, StorageError
 
-VERSION = "0.4.2"
+VERSION = "0.5.0"
 
 PAIR_TTL = 300  # 配对码有效期（秒）
 
@@ -228,7 +228,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/") and not public:
             if not self._check_token():
                 return self._send_error(401, "API Token 无效或缺失")
-            phone_paths = ("/api/export_all", "/api/import_all")
+            phone_paths = ("/api/export_all", "/api/import_all", "/api/sync_certificate")
             if not self._owner() and path not in phone_paths:
                 return self._send_error(403, "手机配对凭据仅允许数据同步")
         if path.startswith("/certificates/") and not self._owner():
@@ -240,7 +240,11 @@ class ApiHandler(BaseHTTPRequestHandler):
                 authorized = value and secrets.compare_digest(value.value, self.app.browser_session)
             except Exception:
                 authorized = False
-            if not authorized or not self._is_loopback():
+            ticket = parse_qs(parsed.query).get("ticket", [""])[0]
+            entry = self.app.attachment_tickets.pop(ticket, None) if ticket else None
+            ticket_ok = bool(entry and entry[1] > time.time()
+                             and secrets.compare_digest(entry[0], os.path.basename(path.rstrip("/"))))
+            if not ticket_ok and (not authorized or not self._is_loopback()):
                 return self._send_error(401, "凭证访问需要本机授权")
         try:
             qs = parse_qs(parsed.query)
@@ -536,6 +540,60 @@ class ApiHandler(BaseHTTPRequestHandler):
             "by_year": by_year,
             "first_author": first_count,
         })
+
+    def _api_sync_certificate(self, method, rest, qs):
+        """GET /api/sync_certificate?name=&preview=1 —— 配对手机拉取获奖凭证。
+
+        仅允许读取「获奖记录已引用」的附件（预览为 <原名>.preview.jpg），
+        单个附件上限 16MB；以 base64 JSON 返回（CapacitorHttp 直连，无跨域问题）。"""
+        import base64
+        if method != "GET" or rest:
+            return self._send_error(405, "仅支持 GET")
+        name = qs.get("name", [""])[0]
+        if not name or any(c in name for c in ("/", "\\", ":")) or name in (".", ".."):
+            return self._send_error(400, "凭证文件名非法")
+        referenced = {f for a in self.app.store.all_awards() for f in a.certificate_files}
+        if name not in referenced:
+            return self._send_error(403, "仅允许同步获奖记录引用的凭证")
+        preview = qs.get("preview", [""])[0] == "1"
+        if preview and not re.search(r"\.(jpe?g|png|webp|gif)$", name, re.I):
+            return self._send_error(404, "此文件无图片预览")
+        selected = name + ".preview.jpg" if preview else name
+        root = os.path.realpath(self.app.store.certificates_dir)
+        path = os.path.realpath(os.path.join(root, selected))
+        if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+            return self._send_error(404, "凭证文件不存在")
+        with open(path, "rb") as handle:
+            raw = handle.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            return self._send_error(413, "单个同步附件上限 16MB，请在电脑查看原件")
+        self._send(200, {"ok": True, "name": selected, "preview": preview,
+                         "data": base64.b64encode(raw).decode("ascii")})
+
+    def _api_attachment_ticket(self, method, rest, qs):
+        """POST /api/attachment_ticket {name} —— 为附件生成 60 秒一次性打开票据。
+
+        本机网页里的 PDF/HTML 附件用系统浏览器打开时没有会话 Cookie，
+        会 401；前端先取票据再把 ?ticket= 拼到 /certificates/ 链接上。"""
+        if method != "POST":
+            return self._send_error(405, "仅支持 POST")
+        data = self._read_json()
+        name = str(data.get("name", "") or "")
+        if not name or any(c in name for c in ("/", "\\", ":")) or name in (".", ".."):
+            return self._send_error(400, "附件文件名非法")
+        referenced = {f for a in self.app.store.all_awards() for f in a.certificate_files}
+        if name not in referenced:
+            return self._send_error(404, "附件不存在或未被引用")
+        root = os.path.realpath(self.app.store.certificates_dir)
+        path = os.path.realpath(os.path.join(root, name))
+        if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+            return self._send_error(404, "附件文件不存在")
+        ticket = secrets.token_urlsafe(24)
+        now = time.time()
+        self.app.attachment_tickets = {k: v for k, v in self.app.attachment_tickets.items() if v[1] > now}
+        self.app.attachment_tickets[ticket] = (name, now + 60)
+        self._send(200, {"ok": True, "ticket": ticket,
+                         "url": f"/certificates/{name}?ticket={ticket}"})
 
     def _api_certificates(self, method, rest, qs):
         """POST /api/certificates —— 上传证书凭证文件 {name, data(base64)}。"""
@@ -1004,6 +1062,9 @@ class ApiServer:
         self.pair_approval: Optional[dict] = None
         self.ai_cfg = aimod.AiConfig(store.data_dir)
         self.ai_jobs = {}
+        # 附件一次性票据：ticket -> (name, expires)。用于 PDF 等附件跳转外部
+        # 浏览器打开时缺少会话 Cookie 的场景（60 秒有效，用后即焚）。
+        self.attachment_tickets: dict = {}
         self.ai_jobs_lock = threading.Lock()
         self.pending_pairs: dict = {}
         self._httpd: Optional[ThreadingHTTPServer] = None
