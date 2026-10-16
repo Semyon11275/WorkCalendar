@@ -457,6 +457,8 @@ function renderAwards() {
   const lv = S_AWARDS.filter.level;
   let html = `<div class="flex items-center gap-2 mb-3">
     <h3 class="font-bold text-[15px] flex-1">🏆 获奖管理 <span class="muted font-normal">${st.total} 条</span></h3>
+    <button class="btn btn-ghost !py-2 !px-2.5 text-xs" onclick="setAllAwardGroups(true)" title="展开所有分组">⊞</button>
+    <button class="btn btn-ghost !py-2 !px-2.5 text-xs" onclick="setAllAwardGroups(false)" title="折叠所有分组">⊟</button>
     <button class="btn btn-primary !py-2 !px-3.5 text-xs" onclick="openAwardForm()">＋ 添加</button>
   </div>
   <div class="flex gap-2 mb-3 overflow-x-auto pb-1" style="scrollbar-width:none">
@@ -477,10 +479,21 @@ function renderAwards() {
   const groups = {};
   for (const a of show) { const key = a.competition || '其他'; (groups[key] = groups[key] || []).push(a); }
   const groupKeys = Object.keys(groups).sort((x, y) => groups[y].length - groups[x].length);
-  for (const key of groupKeys) {
+  S_AWARDS._groupKeys = groupKeys;
+  for (let gi = 0; gi < groupKeys.length; gi++) {
+    const key = groupKeys[gi];
     const items = groups[key];
-    html += `<div class="muted font-medium px-1.5 pt-3 pb-1.5">🏁 ${esc(key)} · ${items.length} 条</div>
-    <div class="space-y-2.5">` + items.map(a => `
+    const open = awardGroupOpen(key, items.length);
+    const fc = items.filter(x => x.is_first_author).length;
+    const lvlSum = items.reduce((m, x) => { if (x.level) m[x.level] = (m[x.level] || 0) + 1; return m; }, {});
+    const lvlText = Object.keys(lvlSum).map(k => k + '×' + lvlSum[k]).join(' · ');
+    const latest = items.map(x => x.award_date || '').filter(Boolean).sort().pop();
+    html += `<div class="flex items-center gap-1.5 px-1.5 pt-3 pb-1.5 cursor-pointer select-none active:opacity-70" onclick="toggleAwardGroup(${gi})" title="${open ? '折叠' : '展开'}该比赛的获奖">
+      <span id="awc_${gi}" class="text-slate-400 text-[9px] transition-transform ${open ? 'rotate-90' : ''}">▶</span>
+      <span class="muted font-medium truncate">🏁 ${esc(key)}</span>
+      <span class="muted text-[10px] ml-auto shrink-0">${items.length} 条${fc ? ' · 一作 ' + fc : ''}${lvlText ? ' · ' + esc(lvlText) : ''}${latest ? ' · ' + fmtDate(latest) : ''}</span>
+    </div>
+    <div id="awg_${gi}" class="space-y-2.5" ${open ? '' : 'style="display:none"'}>` + items.map(a => `
       <div class="card p-3.5 active:scale-[0.99] transition-transform" onclick="viewAwardDetail('${a.id}')">
         <div class="flex items-start gap-2.5">
           <div class="flex-1 min-w-0">
@@ -496,6 +509,38 @@ function renderAwards() {
       </div>`).join('') + `</div>`;
   }
   $('view-awards').innerHTML = html;
+}
+/* ---------- 获奖分组折叠（与 PC 版同款逻辑） ---------- */
+function awardGroupSaved() {
+  try { return JSON.parse(localStorage.getItem('wc_awards_groups') || '{}') || {}; } catch (e) { return {}; }
+}
+function awardGroupOpen(key, count) {
+  if (S_AWARDS.filter.keyword || S_AWARDS.filter.level || S_AWARDS.filter.first) return true;
+  const saved = awardGroupSaved();
+  if (key in saved) return !!saved[key];
+  return count <= 1;
+}
+function toggleAwardGroup(gi) {
+  const key = (S_AWARDS._groupKeys || [])[gi];
+  if (key === undefined) return;
+  const list = $('awg_' + gi), chev = $('awc_' + gi);
+  const nowOpen = !!(list && list.style.display !== 'none');
+  if (list) list.style.display = nowOpen ? 'none' : '';
+  if (chev) chev.classList.toggle('rotate-90', !nowOpen);
+  const saved = awardGroupSaved();
+  saved[key] = !nowOpen;
+  try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
+}
+function setAllAwardGroups(open) {
+  const keys = S_AWARDS._groupKeys || [];
+  const saved = awardGroupSaved();
+  keys.forEach((key, gi) => {
+    saved[key] = open;
+    const list = $('awg_' + gi), chev = $('awc_' + gi);
+    if (list) list.style.display = open ? '' : 'none';
+    if (chev) chev.classList.toggle('rotate-90', open);
+  });
+  try { localStorage.setItem('wc_awards_groups', JSON.stringify(saved)); } catch (e) {}
 }
 function setAwardFilter(kind, val) {
   if (kind === 'level') S_AWARDS.filter.level = val;
