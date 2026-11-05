@@ -5,6 +5,11 @@
       dist/DesignSchedule/DesignSchedule-cli.exe    （--import 无头导入）
 """
 import os
+# Fail before PyInstaller silently accepts a missing GUI dependency.
+import webview
+if not callable(getattr(webview, 'create_window', None)) or not callable(getattr(webview, 'start', None)):
+    raise RuntimeError('Build requires a complete pywebview installation')
+import clr_loader
 
 # 注意：spec 由 PyInstaller exec 执行，没有 __file__；用 cwd（在项目根运行 pyinstaller）
 ROOT = os.getcwd()
