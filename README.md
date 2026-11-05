@@ -1,4 +1,4 @@
-# 工作日历 WorkCalendar 0.5.2
+# 工作日历 WorkCalendar 0.5.3
 
 面向设计学生参加相关比赛的本地日程与获奖管理工具，当前仍然是测试版，各位在使用时遇到问题麻烦手动提交错误日志（出于隐私和信任度考虑，除 AI、网页检索及启动后的 GitHub 版本检查外，此软件基本离线运行，并不能自动提交），目前作者的开发进度基本取决于作者可用的套餐额度，因此改进速度可能较慢∠( ᐛ 」∠)_
 
@@ -9,6 +9,10 @@
 直接下载发行版即可，不会用的同学可以直接把仓库地址丢给你的agent让它帮忙就行。
 
 从 [GitHub Releases](https://github.com/Semyon11275/WorkCalendar/releases/latest) 下载 Windows 压缩包或 Android APK；源码压缩包供开发者使用。下载后可按 SHA256SUMS.txt 校验。
+
+## 0.5.3 更新
+
+修正重复点击安装时的写入保护、安装目标被目录占用的处理，并校验复制后的文件。需要验证升级链路时，先从 Releases 安装 v0.5.2，再在设置中更新到 v0.5.3。
 
 ## 0.5.2 更新
 
@@ -56,7 +60,7 @@ Windows 打包（在项目根运行）：
 
 ```sh
 python -m PyInstaller --noconfirm build.spec
-python scripts/package_update.py dist/WorkCalendar WorkCalendar-Windows-x64-v0.5.2.zip 0.5.2
+python scripts/package_update.py dist/WorkCalendar WorkCalendar-Windows-x64-v0.5.3.zip 0.5.3
 ```
 
 环境变量 `PYTHONPATH` 应为空；输出为 `dist/WorkCalendar/`。公开 ZIP 还须带上 LICENSE、THIRD_PARTY_NOTICES.md、LICENSES/ 与使用说明。不要直接打包正在使用的程序目录。

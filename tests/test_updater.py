@@ -49,3 +49,11 @@ class UpdateTests(unittest.TestCase):
    job=work/'job.json';job.write_text(json.dumps({'root':str(root),'pid':0}))
    r=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'scripts/apply-update.ps1'),'-JobFile',str(job),'-Recover'],capture_output=True)
    self.assertEqual(r.returncode,0,(r.stdout,r.stderr));self.assertEqual((root/'WorkCalendar.exe').read_bytes(),b'old');self.assertFalse((root/'WorkCalendar-cli.exe').exists())
+
+ def test_update_blocks_direct_persistence(self):
+  from app.storage import Store, StorageError
+  with tempfile.TemporaryDirectory() as d:
+   store=Store(d);store.update_pending=True
+   with self.assertRaises(StorageError):store.save()
+   with self.assertRaises(StorageError):store.save_awards()
+   self.assertFalse(Path(store.main_path).exists())

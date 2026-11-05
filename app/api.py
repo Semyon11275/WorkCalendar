@@ -27,7 +27,7 @@ from .models import (Award, Competition, SCHEMA_VERSION, ValidationError,
 from . import ai as aimod
 from .storage import Store, StorageError
 
-VERSION = "0.5.2"
+VERSION = "0.5.3"
 
 PAIR_TTL = 300  # 配对码有效期（秒）
 
@@ -352,6 +352,8 @@ class ApiHandler(BaseHTTPRequestHandler):
         try:
             if rest == 'install':
                 with self.app.store._lock:
+                    if self.app.store.update_pending:
+                        raise ValueError("正在安装更新，请勿重复点击")
                     if not self.app.store._write_queue.empty() or any(j.get('running') for j in self.app.ai_jobs.values()):
                         raise ValueError('仍有导入或 AI 任务，请完成后更新')
                     self.app.store.update_pending = True

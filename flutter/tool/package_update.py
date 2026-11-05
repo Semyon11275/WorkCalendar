@@ -5,6 +5,10 @@ from pathlib import Path
 def package(root,output,version):
  root=Path(root);output=Path(output)
  paths=[root/'workcalendar.exe']+list(root.glob('*.dll'))+list((root/'data').rglob('*'))
+ import shutil
+ source=Path(__file__).resolve().parents[1]
+ for name in ('LICENSE','THIRD_PARTY_NOTICES.md'):
+  shutil.copy2(source/name,root/name);paths.append(root/name)
  files=[]
  for path in paths:
   if path.is_symlink():raise ValueError('Symlink payload')

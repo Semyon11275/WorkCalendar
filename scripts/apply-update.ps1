@@ -103,6 +103,7 @@ try {
   $entries=@()
   foreach($file in $manifest.files) {
     $dest=Target $root $file.path
+    if(Test-Path -LiteralPath $dest -PathType Container) { throw "File target is a directory: $dest" }
     $existed=Test-Path -LiteralPath $dest -PathType Leaf
     if($existed) {
       $bak=Target $backup $file.path
@@ -118,6 +119,7 @@ try {
       $dest=Target $root $file.path
       New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
       Copy-Retry (Target $stage $file.path) $dest
+      if((File-Hash $dest) -ne $file.sha256) { throw "Installed file verification failed" }
     }
     Write-Json $journalFile @{status='installed';entries=$entries}
   } catch { Restore $entries; Write-Json $journalFile @{status='restored';entries=$entries}; throw }

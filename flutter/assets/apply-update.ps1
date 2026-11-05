@@ -18,7 +18,7 @@ $resultFile = Join-Path $work 'result.json'
 function Safe-Relative([string]$rel) {
   if (!$rel -or $rel.Contains('\') -or $rel.Contains(':') -or $rel.StartsWith('/') -or $rel -match '(^|/)\.\.?(/|$)' -or $rel -match '[<>"|?*]' -or $rel -match '[. ]($|/)') { throw "Unsafe package path: $rel" }
   $top = ($rel -split '/')[0]
-  if ($top -notmatch '^(workcalendar\.exe|flutter_windows\.dll|dartjni\.dll|file_selector_windows_plugin\.dll|data)$') { throw "Protected or unknown top-level path: $rel" }
+  if ($top -notmatch '^(workcalendar\.exe|flutter_windows\.dll|dartjni\.dll|file_selector_windows_plugin\.dll|data|LICENSE|THIRD_PARTY_NOTICES\.md)$') { throw "Protected or unknown top-level path: $rel" }
   if ($top -eq 'data' -and $rel -notmatch '^data/(flutter_assets/|app\.so$|icudtl\.dat$)') { throw 'Not Flutter runtime data' }
   if ($rel -match '(^|/)(userdata|models)(/|$)' -or $rel -match '\.(pigeon|library)(/|$)') { throw "User data in package: $rel" }
   return $rel
@@ -104,6 +104,7 @@ try {
   $entries=@()
   foreach($file in $manifest.files) {
     $dest=Target $root $file.path
+    if(Test-Path -LiteralPath $dest -PathType Container) { throw "File target is a directory: $dest" }
     $existed=Test-Path -LiteralPath $dest -PathType Leaf
     if($existed) {
       $bak=Target $backup $file.path
@@ -119,6 +120,7 @@ try {
       $dest=Target $root $file.path
       New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
       Copy-Retry (Target $stage $file.path) $dest
+      if((File-Hash $dest) -ne $file.sha256) { throw "Installed file verification failed" }
     }
     Write-Json $journalFile @{status='installed';entries=$entries}
   } catch { Restore $entries; Write-Json $journalFile @{status='restored';entries=$entries}; throw }

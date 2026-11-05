@@ -330,6 +330,8 @@ class Store:
         os.replace(tmp, path)
 
     def _guard_existing_records(self, path):
+        if self.update_pending:
+            raise StorageError("正在安装更新，暂不可写入数据")
         if not os.path.exists(path):
             return
         field, model = ('competitions', Competition) if path == self.main_path else ('awards', Award)
