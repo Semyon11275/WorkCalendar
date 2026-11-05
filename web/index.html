@@ -1254,7 +1254,7 @@ function renderSettings() {
       <div class="card p-6 col-span-2">
         <h4 class="font-bold text-sm mb-3 flex items-center gap-2">ℹ️ 关于</h4>
         <div class="text-sm space-y-1.5 muted">
-          <div>版本 0.1.0 · 本地单机工具，数据不出本机 · 全免费开源（Python + pywebview + ECharts）</div>
+          <div>版本 <span id="aboutVersion"></span> · 本地存储；AI 与手机同步按所用功能联网 · Apache-2.0 + Commons Clause（详见 LICENSE）</div>
           <div>数据目录：<code id="aboutDataDir" class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs"></code></div>
           <div>数据文件：<code class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">data/competitions.json</code>（记事本可直接查看/备份）</div>
           <div>Agent 端口：<code id="aboutPort" class="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs"></code>（写入 data/agent_port.txt）</div>
@@ -1262,6 +1262,7 @@ function renderSettings() {
         </div>
       </div>
     </div>`;
+  $('aboutVersion').textContent = S.version || '未知';
   $('aboutPort').textContent = S.port;
   $('aboutDataDir').textContent = S.dataDir || '—';
   renderImportHistory('impHistory');
@@ -1741,6 +1742,7 @@ setTimeout(() => wcUpdateAction('check'), 5000);
   }
   try {
     const h = await api('/api/health');
+    S.version = h.version || '';
     S.port = h.port ?? (location.port || '');
     S.dataDir = h.data_dir || '';
   } catch (e) { S.port = location.port || ''; }
