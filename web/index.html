@@ -388,7 +388,7 @@ function render() {
   else if (v === 'ai') renderAi();
   else if (v === 'awards') renderAwards();
   else if (v === 'import') renderImport();
-  else if (v === 'settings') renderSettings();
+  else if (v === 'settings') { renderSettings(); wcUpdateAction(''); }
   $('portInfo').innerHTML = `📍 端口 ${S.port ?? '…'}<br>📦 ${S.stats ? S.stats.total + ' 个比赛' : ''}`;
 }
 
@@ -1181,6 +1181,14 @@ function renderSettings() {
     <h3 class="font-bold text-lg mb-4 flex items-center gap-2 anim-in"><span class="w-1.5 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 inline-block"></span>设置</h3>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div class="card p-6 space-y-4">
+        <h4 class="font-bold text-sm">软件更新</h4>
+        <p id="wcUpdateStatus" class="muted">启动后自动检查 GitHub 正式版；下载与安装由你确认。</p>
+        <div class="flex gap-2 flex-wrap">
+          <button class="btn btn-ghost" onclick="wcUpdateAction('check')">检查更新</button>
+          <button class="btn btn-ghost" onclick="wcUpdateAction('download')">下载新版</button>
+          <button class="btn btn-primary" onclick="wcUpdateAction('install')">安装并重启</button>
+        </div>
+        <pre id="wcUpdateNotes" class="text-xs whitespace-pre-wrap max-h-48 overflow-auto"></pre>
         <h4 class="font-bold text-sm flex items-center gap-2">💾 数据管理</h4>
         <div class="flex flex-wrap gap-2">
           <button class="btn btn-primary" onclick="doBackup()">立即备份</button>
@@ -1700,6 +1708,25 @@ $('statusFilter').addEventListener('change', e => {
 });
 window.__onImport = () => { refresh(); toast('检测到新文件导入，已刷新'); };
 
+let wcUpdateTimer, wcUpdateNotified;
+function wcUpdateDisplay(s) {
+  const labels = {idle:'尚未检查',checking:'正在检查',current:'当前没有更高的旧版正式版本',available:'发现新版本',downloading:'正在下载',ready:'已校验，可安装',installing:'正在退出并安装',error:'更新失败'};
+  if ($('wcUpdateStatus')) $('wcUpdateStatus').textContent = (labels[s.status] || s.status) + (s.available ? ' ' + s.available.version : '') + (s.status === 'downloading' ? ' · ' + s.progress + '%' : '') + (s.error ? '：' + s.error : '');
+  if ($('wcUpdateNotes')) $('wcUpdateNotes').textContent = s.available?.notes || '';
+}
+async function wcUpdateAction(action) {
+  if (IS_LOCAL) return;
+  if (action === 'install' && !confirm('保存并关闭未完成的编辑后继续。应用将退出、安装更新并重新启动，个人数据保留。')) return;
+  try {
+    const s = await api('/api/update' + (action ? '/' + action : ''), action ? {method:'POST',body:{}} : {});
+    if (!s.ok) throw new Error(s.error || '更新请求失败');
+    wcUpdateDisplay(s);
+    clearTimeout(wcUpdateTimer);
+    if (['checking','downloading'].includes(s.status)) wcUpdateTimer = setTimeout(() => wcUpdateAction(''), 1000);
+    if (s.status === 'available' && wcUpdateNotified !== s.available.version) { wcUpdateNotified=s.available.version; toast('发现新版 ' + s.available.version + '，可在设置中下载安装'); }
+  } catch(e) { if ($('wcUpdateStatus')) $('wcUpdateStatus').textContent = e.message; }
+}
+setTimeout(() => wcUpdateAction('check'), 5000);
 (async function init() {
   S.dark = new URLSearchParams(location.search).get('dark') === '1'
     ? true : localStorage.getItem('ds_theme') === 'dark';

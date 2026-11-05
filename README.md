@@ -1,6 +1,6 @@
-# 工作日历 WorkCalendar 0.5.0
+# 工作日历 WorkCalendar 0.5.2
 
-面向设计学生参加相关比赛的本地日程与获奖管理工具，当前仍然是测试版，各位在使用时遇到问题麻烦手动提交错误日志（出于隐私和信任度考虑，除了ai助手功能，此软件基本离线运行，并不能自动提交），目前作者的开发进度基本取决于作者可用的套餐额度，因此改进速度可能较慢∠( ᐛ 」∠)_
+面向设计学生参加相关比赛的本地日程与获奖管理工具，当前仍然是测试版，各位在使用时遇到问题麻烦手动提交错误日志（出于隐私和信任度考虑，除 AI、网页检索及启动后的 GitHub 版本检查外，此软件基本离线运行，并不能自动提交），目前作者的开发进度基本取决于作者可用的套餐额度，因此改进速度可能较慢∠( ᐛ 」∠)_
 
 支持 Windows 桌面与 Android：比赛增删改查、临期线和时间线、获奖凭证、JSON/表格导入、导出备份，以及可选的 AI 助手。基础数据管理可离线使用；AI、网页检索和模型服务需要网络，服务商可能收费。
 
@@ -9,6 +9,12 @@
 直接下载发行版即可，不会用的同学可以直接把仓库地址丢给你的agent让它帮忙就行。
 
 从 [GitHub Releases](https://github.com/Semyon11275/WorkCalendar/releases/latest) 下载 Windows 压缩包或 Android APK；源码压缩包供开发者使用。下载后可按 SHA256SUMS.txt 校验。
+
+## 0.5.2 更新
+
+新增 GitHub 自动检查更新、校验下载与确认安装；Windows 独立安装器备份运行文件，Android 核验包名/签名后交给系统安装。旧版仅接收 0.5.x 正式发布。首次须手动安装带更新器的版本，以后在设置中更新。修复导入时坏记录被静默覆盖的问题，允许赛后里程碑，凭证预览改为后端自动生成。
+
+Flutter 开发源码位于 [`flutter/`](flutter/)，使用独立的预发布标签，不能与旧版安装包混用。
 
 ## 0.5.0 更新
 
@@ -38,7 +44,7 @@ AI 可以修改日历数据。外部网页内容和模型判断可能不准确�
 ```sh
 python -m venv .venv
 # 激活 .venv 后
-pip install pywebview==6.2.1 pyinstaller==6.21.0
+pip install pywebview==6.2.1 pyinstaller==6.21.0 Pillow==12.3.0
 python -m unittest discover -s tests -t .
 node tests/test_mobile.cjs
 node tests/test_sync_frontend.cjs
@@ -50,6 +56,7 @@ Windows 打包（在项目根运行）：
 
 ```sh
 python -m PyInstaller --noconfirm build.spec
+python scripts/package_update.py dist/WorkCalendar WorkCalendar-Windows-x64-v0.5.2.zip 0.5.2
 ```
 
 环境变量 `PYTHONPATH` 应为空；输出为 `dist/WorkCalendar/`。公开 ZIP 还须带上 LICENSE、THIRD_PARTY_NOTICES.md、LICENSES/ 与使用说明。不要直接打包正在使用的程序目录。

@@ -149,7 +149,7 @@ def run_headless(store: Store, api: ApiServer, import_path: str) -> int:
     print(json.dumps({"ok": not report["errors"], "report": dict(report),
                       "port": api.port}, ensure_ascii=False, indent=2))
     api.stop()
-    return 0
+    return 1 if report["errors"] else 0
 
 
 def run_gui(store: Store, api: ApiServer, port: int) -> int:
@@ -202,6 +202,7 @@ def run_gui(store: Store, api: ApiServer, port: int) -> int:
         api.stop()
         return 1
 
+    api.close_for_update = lambda: [w.destroy() for w in list(webview.windows)]
     webview.create_window(
         APP_NAME,
         f"http://127.0.0.1:{actual_port}/",
@@ -222,7 +223,7 @@ def run_gui(store: Store, api: ApiServer, port: int) -> int:
 
 
 def main(argv: Optional[list] = None) -> int:
-    parser = argparse.ArgumentParser(prog="design-schedule", description=APP_NAME)
+    parser = argparse.ArgumentParser(prog="design-schedule", description=APP_NAME, epilog="导入核验：按证书正文与官方公告确认赛事、奖项和作者，不得按文件名归类；不确定日期留空并注明原文（赛事截止日期须核实后再导入）；赛后评审/公示/颁奖允许晚于投稿截止；检查导入报告，禁止直接写数据库 JSON。")
     parser.add_argument("--import", dest="import_path", metavar="FILE",
                         help="无头导入模式：导入比赛文件后退出（Agent/脚本用）")
     parser.add_argument("--import-awards", dest="awards_path", metavar="FILE",

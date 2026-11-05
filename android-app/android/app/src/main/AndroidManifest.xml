@@ -36,6 +36,7 @@
         </provider>
     </application>
 
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />

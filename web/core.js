@@ -432,6 +432,9 @@ function parseComp(raw) {
   const deadline = parseDate(raw.deadline);
   if (!name) throw new Error('name 不能为空');
   if (!deadline) throw new Error('deadline 不是有效日期');
+  for (const key of ['suggested_deadline', 'signup_start', 'signup_end']) {
+    if (raw[key] != null && raw[key] !== '' && !parseDate(raw[key])) throw new Error(key + ' 不是有效日期');
+  }
   const suggested = parseDate(raw.suggested_deadline);
   if (suggested && suggested > deadline) throw new Error('临期线晚于官方截止');
   const ss = parseDate(raw.signup_start), se = parseDate(raw.signup_end);
@@ -440,7 +443,7 @@ function parseComp(raw) {
   if (override && !VALID_OVERRIDES.includes(override)) throw new Error('status_override 非法');
   for (const ms of raw.milestones || []) {
     if (!parseDate(ms?.date)) throw new Error('milestone 日期非法');
-    if (parseDate(ms.date) > deadline) throw new Error('里程碑晚于官方截止');
+
   }
   const known = new Set(['id', 'name', 'deadline', 'suggested_deadline', 'deadline_buffer_days', 'milestones', 'category', 'organizer', 'website', 'signup_start', 'signup_end', 'deadline_note', 'requirements', 'deliverables', 'submission', 'format', 'tags', 'status_override', 'reminder_days', 'notes', 'source', 'source_url', 'created_at', 'updated_at']);
   const extra = {};
@@ -467,6 +470,7 @@ function parseAward(raw) {
   const name = String(raw.name || '').trim();
   if (!name) throw new Error('name 必填');
   const awardDate = parseDate(raw.award_date);
+  if (raw.award_date != null && raw.award_date !== '' && !awardDate) throw new Error('获奖日期无效；仅知年月请留空并在备注注明');
   let level = String(raw.level || '校级').trim();
   if (!VALID_AWARD_LEVELS.includes(level)) level = '校级';
   const first = raw.is_first_author;
@@ -595,7 +599,13 @@ async function certUrl(fname) {
   if (/\.(jpe?g|png|webp|gif)$/i.test(fname)) data = await read(LOC_DIR + '/certificates/' + fname + '.preview.jpg');
   if (!data) data = await read(LOC_DIR + '/certificates/' + fname);
   if (!data) return '';
-  return 'data:' + certDataMime(data, fname) + ';base64,' + data;
+  const bin = atob(data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: certDataMime(data, fname) }));
+  window.__wcCertBlobUrls = window.__wcCertBlobUrls || [];
+  window.__wcCertBlobUrls.push(url);
+  return url;
 }
 /* ================= 数据同步（手机 ↔ 电脑，局域网） ================= */
 function syncToken() {

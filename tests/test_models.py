@@ -155,10 +155,8 @@ class TestValidation(unittest.TestCase):
                                    "signup_end": "2026-08-01"})
 
     def test_milestone_validation(self):
-        # 里程碑晚于官方截止 → 报错
-        with self.assertRaises(ValidationError):
-            Competition.from_dict({"name": "X", "deadline": "2026-09-15",
-                                   "milestones": [{"name": "y", "date": "2026-10-01"}]})
+        Competition.from_dict({"name": "X", "deadline": "2026-09-15",
+                               "milestones": [{"name": "颁奖", "date": "2026-10-01"}]})
         # 里程碑日期非法 → 报错
         with self.assertRaises(ValidationError):
             Competition.from_dict({"name": "X", "deadline": "2026-09-15",

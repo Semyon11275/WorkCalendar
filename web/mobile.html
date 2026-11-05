@@ -196,7 +196,7 @@ function render() {
   else if (S.view === 'comps') renderComps();
   else if (S.view === 'awards') renderAwards();
   else if (S.view === 'ai') renderAi();
-  else if (S.view === 'settings') renderSettings();
+  else if (S.view === 'settings') { renderSettings(); mobileUpdate(''); }
 }
 
 /* ---------- 总览 ---------- */
@@ -673,12 +673,19 @@ async function renderCertsInto(el, certs) {
   if (!el) return;
   certs = certs || [];
   if (!certs.length) { el.innerHTML = '<span class="muted">未上传凭证</span>'; return; }
+  for (const url of (window.__wcCertBlobUrls || [])) URL.revokeObjectURL(url);
+  window.__wcCertBlobUrls = [];
+  const renderId = (el._certRenderId || 0) + 1;
+  el._certRenderId = renderId;
   el.innerHTML = '<span class="muted text-xs">加载凭证…</span>';
   const parts = [];
   for (const f of certs) {
-    const url = await certUrl(f);
+    let url = '';
+    try { url = await certUrl(f); } catch (error) { /* Show this attachment as unavailable; continue rendering others. */ }
+    if (el._certRenderId !== renderId) return;
     if (!url) { parts.push(`<div class="muted text-xs">📄 ${esc(f)}（凭证在电脑上，同步后可见）</div>`); continue; }
     if (/\.(jpe?g|png|webp|gif)$/i.test(f)) parts.push(`<img src="${url}" class="w-full rounded-xl border border-slate-200 dark:border-slate-600 cursor-zoom-in" onclick="wcViewImage(this.src)" alt="${esc(f)}">`);
+    else if (/\.html?$/i.test(f)) parts.push(`<iframe sandbox="" referrerpolicy="no-referrer" src="${url}" title="${esc(f)}" style="width:100%;height:65vh;border:0"></iframe>`);
     else parts.push(`<a class="btn btn-ghost !py-2 !px-3 text-xs" href="${url}" target="_blank" rel="noopener">📄 ${esc(f)}</a>`);
   }
   el.innerHTML = parts.join('');
@@ -842,6 +849,9 @@ async function submitForm() {
 function renderSettings() {
   $('view-settings').innerHTML = `
     <div class="card p-4 space-y-3 mb-3">
+      <h4 class="font-bold text-sm">软件更新</h4>
+      <p id="appUpdateStatus" class="muted text-xs">自动检查 GitHub 正式版；安装须经 Android 系统确认。</p>
+      <div class="flex gap-2 flex-wrap"><button class="btn btn-ghost" onclick="mobileUpdate('check')">检查更新</button><button class="btn btn-ghost" onclick="mobileUpdate('download')">下载</button><button class="btn btn-primary" onclick="mobileUpdate('install')">安装</button></div>
       <h4 class="font-bold text-sm">🔄 数据同步（手机 ↔ 电脑）</h4>
       <div class="muted leading-relaxed">${IS_LOCAL ? '手机和电脑连<b>同一个 WiFi</b>（IP 前两段需一致；校园/公司 WiFi 可能有设备隔离，可改用手机热点），电脑上打开工作日历并在其设置页出示二维码，点下方「扫一扫」即完成配对。电脑地址也可手动填（见电脑设置页列出的候选 IP）。' : '桌面版数据就在本机。手机 APK 装好后，到手机设置页扫这个码配对：'}</div>
       ${!IS_LOCAL ? `
@@ -1204,6 +1214,20 @@ function wcViewImage(src) {
 }
 
 /* ---------- 初始化 ---------- */
+let mobileUpdateTimer;
+async function mobileUpdate(action) {
+  const plugin = window.Capacitor?.Plugins?.AppUpdater;
+  if (!plugin) { if ($('appUpdateStatus')) $('appUpdateStatus').textContent = '请在新版 Android 安装包内使用自动更新'; return; }
+  try {
+    const s = await plugin[action || 'snapshot']();
+    const labels = {idle:'尚未检查',checking:'检查中',current:'没有可用的新版本',available:'发现新版',downloading:'下载中',ready:'已校验，请安装',error:'更新失败'};
+    const text = s.permission_required ? '允许此应用安装更新后，返回再点安装' : (labels[s.status] || s.status) + (s.available ? ' ' + s.available.version : '') + (s.status === 'downloading' ? ' ' + s.progress + '%' : '') + (s.error ? '：' + s.error : '');
+    if ($('appUpdateStatus')) $('appUpdateStatus').textContent = text;
+    clearTimeout(mobileUpdateTimer);
+    if (['checking','downloading'].includes(s.status)) mobileUpdateTimer = setTimeout(() => mobileUpdate(''),1000);
+  } catch(e) { if ($('appUpdateStatus')) $('appUpdateStatus').textContent = e.message; }
+}
+setTimeout(() => { if(IS_LOCAL) mobileUpdate('check'); },5000);
 (async function init() {
   S.dark = localStorage.getItem('ds_theme') === 'dark';
   document.documentElement.classList.toggle('dark', S.dark);

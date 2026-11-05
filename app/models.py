@@ -222,6 +222,9 @@ class Competition:
         elif not name or deadline is None:
             raise ValidationError("name/deadline 缺失或非法")
 
+        for key in ("suggested_deadline", "signup_start", "signup_end"):
+            if data.get(key) not in (None, "") and parse_date(data[key]) is None:
+                raise ValidationError(f"{key} 不是有效日期，请勿填写推测日期")
         suggested = parse_date(data.get("suggested_deadline"))
         signup_start = parse_date(data.get("signup_start"))
         signup_end = parse_date(data.get("signup_end"))
@@ -239,8 +242,6 @@ class Competition:
             d = parse_date(ms.get("date"))
             if d is None:
                 raise ValidationError(f"milestone 日期非法: {ms!r}")
-            if d > deadline:
-                raise ValidationError(f"里程碑 {ms.get('name', '')} 晚于官方截止")
 
         known = {"id", "name", "deadline", "suggested_deadline", "deadline_buffer_days",
                  "milestones", "category", "organizer", "website", "signup_start",
@@ -351,6 +352,8 @@ class Award:
         if not strict and not name:
             raise ValidationError("name 缺失")
         award_date = parse_date(data.get("award_date"))
+        if data.get("award_date") not in (None, "") and award_date is None:
+            raise ValidationError("获奖日期不是有效日期；仅知年月请留空，并在备注注明原文")
         level = str(data.get("level", "校级") or "校级").strip()
         if level not in VALID_AWARD_LEVELS:
             level = "校级"  # 宽松：非法级别回落默认，不报错

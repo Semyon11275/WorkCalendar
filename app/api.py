@@ -27,7 +27,7 @@ from .models import (Award, Competition, SCHEMA_VERSION, ValidationError,
 from . import ai as aimod
 from .storage import Store, StorageError
 
-VERSION = "0.5.0"
+VERSION = "0.5.2"
 
 PAIR_TTL = 300  # 配对码有效期（秒）
 
@@ -335,12 +335,43 @@ class ApiHandler(BaseHTTPRequestHandler):
             return self._send_error(405, "仅支持 GET")
         self._send(200, {"ok": True, "version": VERSION})
 
+    def _api_update(self, method, rest, qs):
+        if not self._is_loopback() or not self._owner():
+            return self._send_error(403, "更新仅限电脑本机管理")
+        if self.app.updater is None:
+            import sys
+            from .updater import Updater
+            root = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.dirname(__file__))
+            resources = os.path.dirname(self.app.web_dir) if self.app.web_dir else root
+            self.app.updater = Updater(root, VERSION, os.path.join(resources, 'scripts', 'apply-update.ps1'),
+                                      close=self.app.close_for_update)
+        updater = self.app.updater
+        if method == 'GET' and not rest:
+            return self._send(200, dict(ok=True, **updater.snapshot()))
+        if method != 'POST': return self._send_error(405, '请使用 POST')
+        try:
+            if rest == 'install':
+                with self.app.store._lock:
+                    if not self.app.store._write_queue.empty() or any(j.get('running') for j in self.app.ai_jobs.values()):
+                        raise ValueError('仍有导入或 AI 任务，请完成后更新')
+                    self.app.store.update_pending = True
+                    try: result = updater.install()
+                    except Exception:
+                        self.app.store.update_pending = False
+                        raise
+            else:
+                result = updater.start(rest)
+            self._send(200, dict(ok=True, **result))
+        except ValueError as exc:
+            self._send_error(400, str(exc))
+
     def _api_schema(self, method, rest, qs):
         if method != "GET":
             return self._send_error(405, "仅支持 GET")
         self._send(200, {
             "schema_version": SCHEMA_VERSION,
             "required": ["name", "deadline"],
+            "verification_requirements": '核验要求：赛事归属、奖项名称和作者以证书正文及官方公告为依据，不得根据文件名归类；只知年份或月份时不得补造月日，日期留空并在备注记录原文和精度；来源链接、赛项与阶段需注明；日期离群需复核而非自动改写；报名开始不得晚于同一阶段结束；评审、公示、颁奖可晚于投稿截止；作者角色与一作标记须一致；无凭证须注明原因。禁止直接改写数据库 JSON，请使用导入接口并检查返回报告。',
             "fields": {
                 "name": "比赛名称(必填)", "deadline": "官方截止 YYYY-MM-DD(必填)",
                 "suggested_deadline": "临期线 YYYY-MM-DD",
@@ -561,6 +592,9 @@ class ApiHandler(BaseHTTPRequestHandler):
         preview = qs.get("preview", [""])[0] == "1"
         if preview and not re.search(r"\.(jpe?g|png|webp|gif)$", name, re.I):
             return self._send_error(404, "此文件无图片预览")
+        if preview:
+            from .previews import ensure_preview
+            ensure_preview(self.app.store.certificates_dir, name)
         selected = name + ".preview.jpg" if preview else name
         root = os.path.realpath(self.app.store.certificates_dir)
         path = os.path.realpath(os.path.join(root, selected))
@@ -1054,6 +1088,8 @@ class ApiServer:
 
     def __init__(self, store: Store, port: int = 0, token: Optional[str] = None,
                  web_dir: Optional[str] = None, host: str = "127.0.0.1"):
+        self.updater = None
+        self.close_for_update = None
         self.store = store
         self.token = token or secrets.token_urlsafe(32)
         self.browser_session = secrets.token_urlsafe(32)

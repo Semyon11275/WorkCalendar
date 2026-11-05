@@ -24,3 +24,8 @@ Microsoft Edge WebView2 Runtime is a system prerequisite distributed by Microsof
 Google ML Kit's downloaded/native barcode components are not relicensed by this project. See https://developers.google.com/ml-kit/terms and the Android dependency notices. Preserve third-party notices when redistributing or rebuilding.
 
 The vendored SheetJS script was obtained from the @e965/xlsx mirror after the official CDN returned 403. Its complete script MD5 matches the value published by SheetJS for 0.20.3; a SHA256 and the provenance URL are recorded. No third-party package scripts were executed to obtain it.
+
+
+## Pillow 12.3.0
+
+Used for headless certificate image previews. License: MIT-CMU / HPND (see the complete upstream license in LICENSES/Pillow-LICENSE.txt). Original certificate files are not modified.

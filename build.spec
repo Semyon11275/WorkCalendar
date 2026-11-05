@@ -11,7 +11,7 @@ ROOT = os.getcwd()
 
 COMMON = dict(
     pathex=[ROOT],
-    datas=[(os.path.join(ROOT, 'web'), 'web')],
+    datas=[(os.path.join(ROOT, 'web'), 'web'), (os.path.join(ROOT, 'scripts', 'apply-update.ps1'), 'scripts')],
     hiddenimports=['webview', 'clr_loader'],
     excludes=[
         # 注意：不要排除 http.server / socketserver（API 服务器运行时依赖），

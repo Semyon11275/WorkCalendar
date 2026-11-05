@@ -18,6 +18,8 @@ import threading
 from datetime import date, datetime
 from typing import Callable, Optional
 
+from .previews import schedule_preview
+
 from .models import (SCHEMA_VERSION, Award, Competition, ValidationError,
                      now_iso)
 
@@ -58,6 +60,7 @@ class Store:
         self._competitions: dict[str, Competition] = {}   # id -> Competition
         self._awards: dict[str, Award] = {}               # id -> Award
         self._last_loaded = ""
+        self.update_pending = False
 
         self._ensure_dirs()
         if load_now:
@@ -282,6 +285,10 @@ class Store:
 
         def _run():
             try:
+                if self.update_pending:
+                    raise StorageError("正在安装更新，暂不可修改数据")
+                self._guard_existing_records(self.main_path)
+                self._guard_existing_records(self.awards_path)
                 result["value"] = fn()
             except Exception as e:  # noqa: BLE001 —— 队列里兜住一切异常
                 result["error"] = e
@@ -322,6 +329,25 @@ class Store:
             os.fsync(f.fileno())
         os.replace(tmp, path)
 
+    def _guard_existing_records(self, path):
+        if not os.path.exists(path):
+            return
+        field, model = ('competitions', Competition) if path == self.main_path else ('awards', Award)
+        try:
+            with open(path, encoding='utf-8') as handle:
+                raw = json.load(handle)
+            records = raw.get(field) if isinstance(raw, dict) else raw
+            if not isinstance(records, list):
+                raise ValueError('记录列表格式错误')
+            ids = set()
+            for index, record in enumerate(records):
+                parsed = model.from_dict(record)
+                if parsed.id in ids:
+                    raise ValueError(f'重复 ID: {parsed.id}')
+                ids.add(parsed.id)
+        except Exception as exc:
+            raise StorageError(f'原数据含无法加载的记录，已阻止覆盖，请核对并修复原文件：{path}: {exc}') from exc
+
     def save(self, competitions: Optional[dict] = None, backup: bool = True) -> dict:
         """落盘（单写者队列中调用或直接调用均安全）。
 
@@ -329,6 +355,7 @@ class Store:
         恢复时取最新可用备份即可回到最近状态。
         """
         with self._lock:
+            self._guard_existing_records(self.main_path)
             comps = competitions if competitions is not None else self._competitions
             data = {
                 "schema_version": SCHEMA_VERSION,
@@ -401,6 +428,7 @@ class Store:
     def save_awards(self, awards: Optional[dict] = None, backup: bool = True) -> dict:
         """获奖数据落盘（原子写 + 自动备份 awards_*.json）。"""
         with self._lock:
+            self._guard_existing_records(self.awards_path)
             items = awards if awards is not None else self._awards
             data = {
                 "schema_version": SCHEMA_VERSION,
@@ -414,6 +442,9 @@ class Store:
                 self._backup_awards(datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
                 self._rotate_backups()
             self._awards = items
+            for award in items.values():
+                for name in award.certificate_files:
+                    schedule_preview(self.certificates_dir, name)
             self.info(f"已保存获奖 {len(items)} 条")
             return {"count": len(items)}
 
@@ -464,6 +495,7 @@ class Store:
         path = os.path.join(self.certificates_dir, safe)
         with open(path, "wb") as f:
             f.write(data)
+        schedule_preview(self.certificates_dir, safe)
         self.info(f"已保存凭证文件: {safe}")
         return safe
 

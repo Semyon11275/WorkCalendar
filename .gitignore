@@ -38,3 +38,7 @@ android-app/www/
 .env*
 !.env.example
 stub_out.log
+
+.updates/
+userdata/
+key.properties
